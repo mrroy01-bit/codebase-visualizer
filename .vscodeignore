@@ -1,0 +1,8 @@
+.git/**
+.github/**
+.vscode/**
+.codex
+node_modules/**
+*.log
+*.tmp
+*.vsix

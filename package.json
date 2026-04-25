@@ -1,0 +1,95 @@
+{
+  "name": "codebase-visualizer",
+  "displayName": "Codebase Visualizer",
+  "description": "Analyze an entire workspace and explore file dependencies, module connections, and project structure in an interactive VS Code graph.",
+  "version": "0.0.1",
+  "publisher": "mrRoy",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "activationEvents": [
+    "onCommand:codebaseVisualizer.show",
+    "onCommand:codebaseVisualizer.refresh"
+  ],
+  "main": "./Extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codebaseVisualizer.show",
+        "title": "Codebase Visualizer: Open Project Graph",
+        "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebaseVisualizer.refresh",
+        "title": "Codebase Visualizer: Refresh Project Graph",
+        "category": "Codebase Visualizer"
+      }
+    ],
+    "configuration": {
+      "title": "Codebase Visualizer",
+      "properties": {
+        "codebaseVisualizer.excludePatterns": {
+          "type": "array",
+          "default": [
+            "node_modules",
+            ".git",
+            "dist",
+            "build",
+            ".next",
+            "coverage"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Folder or file patterns to skip during analysis."
+        },
+        "codebaseVisualizer.maxFiles": {
+          "type": "number",
+          "default": 750,
+          "minimum": 50,
+          "description": "Maximum number of files to analyze before stopping the scan."
+        },
+        "codebaseVisualizer.includeExtensions": {
+          "type": "array",
+          "default": [
+            ".js",
+            ".jsx",
+            ".ts",
+            ".tsx",
+            ".mjs",
+            ".cjs",
+            ".py",
+            ".vue",
+            ".svelte"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "File extensions that should be included in the graph."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "lint": "node -e \"console.log('No lint step configured yet.')\"",
+    "package": "npx @vscode/vsce package",
+    "publish": "npx @vscode/vsce publish"
+  },
+  "keywords": [
+    "graph",
+    "dependency",
+    "visualizer",
+    "architecture",
+    "workspace"
+  ],
+  "license": "MIT",
+  "preview": true,
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.1"
+  }
+}
