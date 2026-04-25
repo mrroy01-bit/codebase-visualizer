@@ -143,29 +143,6 @@ The analyzer also contains parsing patterns for additional languages such as Go,
 2. Press `F5` to launch an Extension Development Host.
 3. In the new window, run `CodeAtlas: Open Project Graph`.
 
-## Packaging
-
-Before publishing:
-
-1. Replace the placeholder `publisher` value in `package.json` with your actual VS Code Marketplace publisher ID.
-2. Install the packaging tool:
-
-```bash
-npm install --save-dev @vscode/vsce
-```
-
-3. Create a `.vsix` package:
-
-```bash
-npm run package
-```
-
-4. Publish to the marketplace:
-
-```bash
-npm run publish
-```
-
 ## Notes
 
 - The current manifest is marked as `preview` until you finish testing in a real Extension Development Host.
