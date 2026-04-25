@@ -10,7 +10,7 @@ class GraphPanel {
 
     this._panel = vscode.window.createWebviewPanel(
       'codebaseVisualizer',
-      'Codebase Visualizer',
+      'CodeAtlas',
       vscode.ViewColumn.One,
       {
         enableScripts: true,

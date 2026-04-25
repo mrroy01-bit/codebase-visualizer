@@ -20,7 +20,7 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; style-src 'unsafe-inline'; img-src data: blob:; font-src https://fonts.gstatic.com; connect-src 'none';">
-  <title>Codebase Visualizer</title>
+  <title>CodeAtlas</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
 
@@ -211,6 +211,58 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
     #stats-mini span { display: flex; align-items: center; gap: 4px; }
     #stats-mini strong { color: var(--text); font-weight: 600; }
 
+    #flowbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background:
+        linear-gradient(90deg, rgba(255,166,87,0.08), rgba(88,166,255,0.08), rgba(63,185,80,0.08), rgba(210,168,255,0.08));
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+
+    .flow-stage-card {
+      min-width: 180px;
+      background: rgba(13, 17, 23, 0.55);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    }
+
+    .flow-stage-accent {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+
+    .flow-stage-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .flow-stage-count {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    .flow-stage-arrow {
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
     /* ── LAYOUT ── */
     #main {
       display: flex;
@@ -379,6 +431,27 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
       color: var(--text-muted);
       font-family: 'JetBrains Mono', monospace;
       margin-top: 2px;
+    }
+
+    .node-stage-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .node-stage-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
     }
 
     .stat-grid {
@@ -587,7 +660,7 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
       <line x1="10" y1="6.5" x2="17" y2="13.5" stroke="#58a6ff" stroke-width="1.5" opacity="0.6"/>
       <line x1="3" y1="16" x2="17" y2="16" stroke="#3fb950" stroke-width="1.5" opacity="0.4"/>
     </svg>
-    Codebase Visualizer
+    CodeAtlas
   </div>
 
   <div id="search-wrap">
@@ -600,6 +673,7 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
 
   <select class="layout-select" id="layout-select">
     <option value="force">Force Layout</option>
+    <option value="flow">Flow Layout</option>
     <option value="radial">Radial Layout</option>
     <option value="folder">Folder Groups</option>
   </select>
@@ -608,6 +682,8 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
 
   <div class="controls">
     <button class="btn" id="btn-fit" title="Fit to screen">⊡ Fit</button>
+    <button class="btn" id="btn-labels" title="Change label density">Labels: Smart</button>
+    <button class="btn" id="btn-export" title="Export graph JSON">⇩ Export</button>
     <button class="btn" id="btn-toggle-panel" title="Toggle side panel">≡ Panel</button>
     <button class="btn" onclick="vscodeApi.postMessage({command:'refresh'})" title="Re-analyze workspace">↺ Refresh</button>
   </div>
@@ -623,6 +699,9 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
     <span><strong id="stat-lines">0</strong> lines</span>
   </div>
 </div>
+
+<div id="flowbar"></div>
+<div id="summary-banner" style="display:flex;gap:10px;padding:10px 16px;background:rgba(88,166,255,0.06);border-bottom:1px solid var(--border);flex-wrap:wrap"></div>
 
 <!-- MAIN -->
 <div id="main">
@@ -707,6 +786,7 @@ class GraphEngine {
     this.selectedNode = null;
     this.hoveredNode = null;
     this.highlightedNodes = new Set();
+    this.labelMode = 'smart';
 
     // Viewport
     this.offsetX = 0;
@@ -726,6 +806,8 @@ class GraphEngine {
 
     // Layout
     this.layout = 'force';
+    this.flowOrder = ['start', 'main', 'core', 'helpers'];
+    this.flowColumns = [];
 
     this.resize();
     this.bindEvents();
@@ -744,6 +826,12 @@ class GraphEngine {
   }
 
   loadData(nodes, edges) {
+    const degreeMap = new Map();
+    for (const edge of edges) {
+      degreeMap.set(edge.source, (degreeMap.get(edge.source) || 0) + 1);
+      degreeMap.set(edge.target, (degreeMap.get(edge.target) || 0) + 1);
+    }
+
     // Assign positions
     const cx = this.W / 2, cy = this.H / 2;
     this.nodes = nodes.map((n, i) => ({
@@ -753,11 +841,17 @@ class GraphEngine {
       vx: 0,
       vy: 0,
       r: this.nodeRadius(n),
+      degree: degreeMap.get(n.id) || 0,
+      labelPriority: 0,
     }));
     this.edges = edges;
     this.filteredNodes = new Set(this.nodes.map(n => n.id));
     this.filteredEdges = [...edges];
     this.nodeMap = new Map(this.nodes.map(n => [n.id, n]));
+    const rankedNodes = [...this.nodes].sort((a, b) => b.degree - a.degree);
+    rankedNodes.forEach((node, index) => {
+      node.labelPriority = index;
+    });
     this.startSimulation();
   }
 
@@ -833,7 +927,9 @@ class GraphEngine {
     this.layout = type;
     this.isSimulating = false;
 
-    if (type === 'radial') {
+    if (type === 'flow') {
+      this.applyFlowLayout();
+    } else if (type === 'radial') {
       this.applyRadialLayout();
     } else if (type === 'folder') {
       this.applyFolderLayout();
@@ -841,6 +937,70 @@ class GraphEngine {
       this.isSimulating = true;
       this.tick = 0;
     }
+  }
+
+  pickInitialLayout() {
+    const nodeCount = this.nodes.length;
+    if (nodeCount >= 320) return 'folder';
+    if (nodeCount >= 140) return 'radial';
+    if (nodeCount >= 70) return 'flow';
+    return 'force';
+  }
+
+  shouldShowLabel(n) {
+    const isSelected = this.selectedNode === n;
+    const isHovered = this.hoveredNode === n;
+    const isHighlighted = this.highlightedNodes.has(n.id);
+
+    if (isSelected || isHovered) return true;
+    if (this.labelMode === 'focus') return false;
+    if (this.labelMode === 'all') return true;
+
+    const visibleCount = this.filteredNodes.size;
+    if (visibleCount <= 80) return true;
+    if (isHighlighted) return true;
+    if (this.layout === 'flow') return n.labelPriority < Math.min(visibleCount * 0.3, 50);
+    if (this.scale >= 1.1) return n.labelPriority < Math.min(visibleCount * 0.2, 40);
+    return n.labelPriority < Math.min(visibleCount * 0.08, 18);
+  }
+
+  applyFlowLayout() {
+    const visible = this.nodes
+      .filter(n => this.filteredNodes.has(n.id))
+      .sort((a, b) => {
+        const stageDiff = this.flowOrder.indexOf(a.stage || 'main') - this.flowOrder.indexOf(b.stage || 'main');
+        if (stageDiff !== 0) return stageDiff;
+        const strengthA = (a.importedBy?.length || 0) + (a.imports?.length || 0);
+        const strengthB = (b.importedBy?.length || 0) + (b.imports?.length || 0);
+        return strengthB - strengthA;
+      });
+
+    const laneWidth = Math.max(220, (this.W - 120) / this.flowOrder.length);
+    const topPad = 90;
+    const bottomPad = 60;
+    const usableHeight = Math.max(120, this.H - topPad - bottomPad);
+    this.flowColumns = [];
+
+    this.flowOrder.forEach((stage, index) => {
+      const stageNodes = visible.filter(n => (n.stage || 'main') === stage);
+      const x = 80 + laneWidth * index + laneWidth / 2;
+      const gap = usableHeight / Math.max(stageNodes.length, 1);
+
+      this.flowColumns.push({
+        stage,
+        label: stage.toUpperCase(),
+        x: 80 + laneWidth * index,
+        width: laneWidth - 18,
+        color: stageNodes[0]?.stageColor || stageColor(stage),
+      });
+
+      stageNodes.forEach((node, nodeIndex) => {
+        node.x = x;
+        node.y = topPad + gap * nodeIndex + gap / 2;
+        node.vx = 0;
+        node.vy = 0;
+      });
+    });
   }
 
   applyRadialLayout() {
@@ -906,6 +1066,9 @@ class GraphEngine {
     ctx.translate(this.offsetX, this.offsetY);
     ctx.scale(this.scale, this.scale);
 
+    if (this.layout === 'flow') {
+      this.drawFlowLanes(ctx);
+    }
     this.drawEdges(ctx);
     this.drawNodes(ctx);
     this.drawLabels(ctx);
@@ -914,8 +1077,27 @@ class GraphEngine {
     this.drawMinimap();
   }
 
+  drawFlowLanes(ctx) {
+    for (const column of this.flowColumns) {
+      ctx.save();
+      ctx.fillStyle = column.color + '14';
+      ctx.strokeStyle = column.color + '55';
+      ctx.lineWidth = 1;
+      roundRect(ctx, column.x, 28, column.width, this.H - 56, 18);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#e6edf3';
+      ctx.font = '600 13px DM Sans, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(column.label, column.x + column.width / 2, 50);
+      ctx.restore();
+    }
+  }
+
   drawEdges(ctx) {
     const hasHighlight = this.highlightedNodes.size > 0;
+    const densityFade = this.filteredNodes.size > 260 ? 0.65 : this.filteredNodes.size > 140 ? 0.78 : 1;
 
     for (const e of this.filteredEdges) {
       const a = this.nodeMap.get(e.source), b = this.nodeMap.get(e.target);
@@ -924,16 +1106,20 @@ class GraphEngine {
       const isConnected = !hasHighlight || (this.highlightedNodes.has(e.source) && this.highlightedNodes.has(e.target));
 
       ctx.save();
-      ctx.globalAlpha = isConnected ? 0.6 : 0.06;
-      ctx.strokeStyle = isConnected ? '#58a6ff' : '#8b949e';
-      ctx.lineWidth = isConnected ? 1.2 : 0.8;
+      ctx.globalAlpha = (isConnected ? 0.6 : 0.06) * densityFade;
+      ctx.strokeStyle = isConnected ? (a.stageColor || '#58a6ff') : '#8b949e';
+      ctx.lineWidth = isConnected ? (this.layout === 'flow' ? 1.6 : 1.2) : 0.8;
 
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
 
       // Curved edges
-      const mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.1;
-      const my = (a.y + b.y) / 2 - (b.x - a.x) * 0.1;
+      const mx = this.layout === 'flow'
+        ? (a.x + b.x) / 2
+        : (a.x + b.x) / 2 + (b.y - a.y) * 0.1;
+      const my = this.layout === 'flow'
+        ? (a.y + b.y) / 2
+        : (a.y + b.y) / 2 - (b.x - a.x) * 0.1;
       ctx.quadraticCurveTo(mx, my, b.x, b.y);
       ctx.stroke();
 
@@ -950,7 +1136,7 @@ class GraphEngine {
         ctx.lineTo(arrowX - 6 * Math.cos(angle - 0.4), arrowY - 6 * Math.sin(angle - 0.4));
         ctx.lineTo(arrowX - 6 * Math.cos(angle + 0.4), arrowY - 6 * Math.sin(angle + 0.4));
         ctx.closePath();
-        ctx.fillStyle = '#58a6ff';
+        ctx.fillStyle = a.stageColor || '#58a6ff';
         ctx.fill();
       }
 
@@ -986,20 +1172,38 @@ class GraphEngine {
         ctx.stroke();
       }
 
-      // Node circle
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      if (this.layout === 'flow') {
+        const width = Math.max(104, Math.min(170, n.label.length * 7 + 44));
+        const height = 34;
+        n.cardWidth = width;
+        n.cardHeight = height;
+        roundRect(ctx, n.x - width / 2, n.y - height / 2, width, height, 12);
+        ctx.fillStyle = (n.stageColor || n.color) + '22';
+        ctx.fill();
+        ctx.strokeStyle = isSelected ? '#fff' : (n.stageColor || n.color);
+        ctx.lineWidth = isSelected ? 2 : 1.1;
+        ctx.stroke();
 
-      // Gradient fill
-      const grad = ctx.createRadialGradient(n.x - n.r*0.3, n.y - n.r*0.3, 0, n.x, n.y, n.r);
-      grad.addColorStop(0, n.color + 'ff');
-      grad.addColorStop(1, n.color + '99');
-      ctx.fillStyle = grad;
-      ctx.fill();
+        ctx.fillStyle = n.stageColor || n.color;
+        ctx.beginPath();
+        ctx.arc(n.x - width / 2 + 14, n.y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Node circle
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
 
-      ctx.strokeStyle = isSelected ? '#fff' : n.color + 'cc';
-      ctx.lineWidth = isSelected ? 2 : 1;
-      ctx.stroke();
+        // Gradient fill
+        const grad = ctx.createRadialGradient(n.x - n.r*0.3, n.y - n.r*0.3, 0, n.x, n.y, n.r);
+        grad.addColorStop(0, (n.stageColor || n.color) + 'ff');
+        grad.addColorStop(1, (n.stageColor || n.color) + '99');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.strokeStyle = isSelected ? '#fff' : (n.stageColor || n.color) + 'cc';
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.stroke();
+      }
 
       ctx.restore();
     }
@@ -1011,16 +1215,17 @@ class GraphEngine {
 
     for (const n of this.nodes) {
       if (!this.filteredNodes.has(n.id)) continue;
+      if (!this.shouldShowLabel(n)) continue;
 
       const isSelected = this.selectedNode === n;
       const isHovered = this.hoveredNode === n;
       const isHighlighted = this.highlightedNodes.size === 0 || this.highlightedNodes.has(n.id);
 
-      if (!isSelected && !isHovered && this.scale < 0.7 && n.r < 8) continue;
+      if (!isSelected && !isHovered && this.layout !== 'flow' && this.scale < 0.7 && n.r < 8 && this.labelMode !== 'all') continue;
 
       ctx.save();
       ctx.globalAlpha = isHighlighted ? (isSelected || isHovered ? 1 : 0.75) : 0.2;
-      ctx.font = \`${isSelected ? 600 : 400} ${Math.min(12 / this.scale, 12)}px DM Sans, sans-serif\`;
+      ctx.font = (isSelected ? 600 : 400) + ' ' + Math.min(12 / this.scale, 12) + 'px DM Sans, sans-serif';
       ctx.fillStyle = isSelected ? '#fff' : '#e6edf3';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1028,13 +1233,19 @@ class GraphEngine {
       // Background for label
       const label = n.label;
       const tw = ctx.measureText(label).width;
-      const lx = n.x, ly = n.y + n.r + 8 / this.scale;
+      if (this.layout === 'flow') {
+        ctx.fillStyle = isSelected ? '#fff' : '#e6edf3';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, n.x - (n.cardWidth || 110) / 2 + 26, n.y);
+      } else {
+        const lx = n.x, ly = n.y + n.r + 8 / this.scale;
 
-      ctx.fillStyle = 'rgba(13,17,23,0.7)';
-      ctx.fillRect(lx - tw/2 - 2, ly - 6/this.scale, tw + 4, 12/this.scale);
+        ctx.fillStyle = 'rgba(13,17,23,0.7)';
+        ctx.fillRect(lx - tw/2 - 2, ly - 6/this.scale, tw + 4, 12/this.scale);
 
-      ctx.fillStyle = isSelected ? '#fff' : '#e6edf3';
-      ctx.fillText(label, lx, ly);
+        ctx.fillStyle = isSelected ? '#fff' : '#e6edf3';
+        ctx.fillText(label, lx, ly);
+      }
       ctx.restore();
     }
   }
@@ -1113,8 +1324,21 @@ class GraphEngine {
     for (let i = this.nodes.length - 1; i >= 0; i--) {
       const n = this.nodes[i];
       if (!this.filteredNodes.has(n.id)) continue;
-      const dx = n.x - x, dy = n.y - y;
-      if (dx*dx + dy*dy <= (n.r + 4) * (n.r + 4)) return n;
+      if (this.layout === 'flow') {
+        const width = n.cardWidth || 120;
+        const height = n.cardHeight || 34;
+        if (
+          x >= n.x - width / 2 &&
+          x <= n.x + width / 2 &&
+          y >= n.y - height / 2 &&
+          y <= n.y + height / 2
+        ) {
+          return n;
+        }
+      } else {
+        const dx = n.x - x, dy = n.y - y;
+        if (dx*dx + dy*dy <= (n.r + 4) * (n.r + 4)) return n;
+      }
     }
     return null;
   }
@@ -1281,6 +1505,10 @@ class GraphEngine {
         .filter(n => this.filteredNodes.has(n.id))
         .reduce((sum, n) => sum + (n.lines || 0), 0)
     );
+    if (this.layout === 'flow') this.applyFlowLayout();
+    if (this.layout === 'radial') this.applyRadialLayout();
+    if (this.layout === 'folder') this.applyFolderLayout();
+    updateSummaryBanner();
     updateEmptyState();
   }
 
@@ -1305,6 +1533,37 @@ function fmtNum(n) {
   if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
   if (n >= 1000) return (n/1000).toFixed(1) + 'K';
   return n.toString();
+}
+
+function stageColor(stage) {
+  const COLORS = {
+    start: '#ffa657',
+    main: '#58a6ff',
+    core: '#3fb950',
+    helpers: '#d2a8ff',
+  };
+  return COLORS[stage] || COLORS.main;
+}
+
+function stageLabel(stage) {
+  const LABELS = {
+    start: 'Start',
+    main: 'Main',
+    core: 'Core',
+    helpers: 'Helpers',
+  };
+  return LABELS[stage] || 'Main';
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
 }
 
 function extColor(ext) {
@@ -1335,8 +1594,13 @@ function init() {
   const canvas = document.getElementById('graph-canvas');
   engine = new GraphEngine(canvas);
   engine.loadData(graphData.nodes, graphData.edges);
+  const initialLayout = engine.pickInitialLayout();
+  engine.setLayout(initialLayout);
+  document.getElementById('layout-select').value = initialLayout;
 
   setupStats();
+  setupFlowBar();
+  updateSummaryBanner();
   setupFilterChips();
   setupLegend();
   setupSearch();
@@ -1382,11 +1646,10 @@ function setupFilterChips() {
 
 function setupLegend() {
   const items = [
-    { label: 'Entry / Main', color: '#ffa657' },
-    { label: 'Module', color: '#58a6ff' },
-    { label: 'Test', color: '#3fb950' },
-    { label: 'Config', color: '#d2a8ff' },
-    { label: 'Style', color: '#f778ba' },
+    { label: 'Start', color: '#ffa657' },
+    { label: 'Main', color: '#58a6ff' },
+    { label: 'Core', color: '#3fb950' },
+    { label: 'Helpers', color: '#d2a8ff' },
   ];
   const container = document.getElementById('legend-items');
   for (const item of items) {
@@ -1395,6 +1658,23 @@ function setupLegend() {
     el.innerHTML = \`<div class="legend-dot" style="background:\${item.color}"></div><span style="font-size:11px;color:#8b949e">\${item.label}</span>\`;
     container.appendChild(el);
   }
+}
+
+function setupFlowBar() {
+  const flowBar = document.getElementById('flowbar');
+  const stages = graphData?.stats?.flowStages || {};
+  const order = ['start', 'main', 'core', 'helpers'];
+
+  flowBar.innerHTML = order.map((stage, index) =>
+    '<div class="flow-stage-card">' +
+      '<div class="flow-stage-accent" style="background:' + stageColor(stage) + '"></div>' +
+      '<div>' +
+        '<div class="flow-stage-title">' + stageLabel(stage) + '</div>' +
+        '<div class="flow-stage-count">' + fmtNum(stages[stage] || 0) + ' files</div>' +
+      '</div>' +
+    '</div>' +
+    (index < order.length - 1 ? '<div class="flow-stage-arrow">→</div>' : '')
+  ).join('');
 }
 
 function setupSearch() {
@@ -1434,6 +1714,8 @@ function setupSearch() {
 
 function setupControls() {
   document.getElementById('btn-fit').addEventListener('click', () => engine.fitToScreen());
+  document.getElementById('btn-labels').addEventListener('click', cycleLabelMode);
+  document.getElementById('btn-export').addEventListener('click', exportGraph);
   document.getElementById('zoom-in').addEventListener('click', () => engine.zoom(1.2));
   document.getElementById('zoom-out').addEventListener('click', () => engine.zoom(0.8));
 
@@ -1443,8 +1725,80 @@ function setupControls() {
 
   document.getElementById('layout-select').addEventListener('change', e => {
     engine.setLayout(e.target.value);
+    updateSummaryBanner();
     setTimeout(() => engine.fitToScreen(), 500);
   });
+
+  updateLabelButton();
+}
+
+function cycleLabelMode() {
+  if (!engine) return;
+  engine.labelMode = engine.labelMode === 'smart'
+    ? 'focus'
+    : engine.labelMode === 'focus'
+      ? 'all'
+      : 'smart';
+  updateLabelButton();
+}
+
+function updateLabelButton() {
+  const btn = document.getElementById('btn-labels');
+  if (!btn || !engine) return;
+  btn.textContent = engine.labelMode === 'focus'
+    ? 'Labels: Focus'
+    : engine.labelMode === 'all'
+      ? 'Labels: All'
+      : 'Labels: Smart';
+}
+
+function updateSummaryBanner() {
+  const banner = document.getElementById('summary-banner');
+  if (!banner || !graphData || !engine) return;
+
+  const visibleNodes = graphData.nodes.filter(n => engine.filteredNodes.has(n.id));
+  const visibleEdges = engine.filteredEdges.length;
+  const visibleLines = visibleNodes.reduce((sum, n) => sum + (n.lines || 0), 0);
+  const crowdedHint = visibleNodes.length > 250
+    ? 'Large graph: folder and radial layouts will usually read better than force.'
+    : visibleNodes.length > 120
+      ? 'Medium graph: smart labels keep the canvas cleaner while keeping important files visible.'
+      : 'Smaller graph: force layout should stay readable and useful for local exploration.';
+
+  banner.innerHTML = [
+    { label: 'Visible files', value: fmtNum(visibleNodes.length) },
+    { label: 'Visible edges', value: fmtNum(visibleEdges) },
+    { label: 'Visible lines', value: fmtNum(visibleLines) },
+    { label: 'Layout', value: document.getElementById('layout-select')?.value || 'force' },
+  ].map(item => \`
+    <div class="stat-card" style="min-width:140px;margin:0">
+      <div class="stat-val" style="font-size:16px">\${item.value}</div>
+      <div class="stat-lbl">\${item.label}</div>
+    </div>
+  \`).join('') + \`
+    <div style="display:flex;align-items:center;color:var(--text-muted);font-size:12px;line-height:1.5;max-width:520px;padding:0 2px">
+      \${crowdedHint}
+    </div>
+  \`;
+}
+
+function exportGraph() {
+  if (!graphData) return;
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    rootPath: ROOT_PATH,
+    summary: graphData.stats || {},
+    nodes: graphData.nodes,
+    edges: graphData.edges,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'codeatlas-graph.json';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function setupSidePanel() {
@@ -1470,14 +1824,26 @@ function setupTabs() {
 }
 
 function renderPlaceholder() {
+  const stages = graphData?.stats?.flowStages || {};
   document.getElementById('panel-content').innerHTML = \`
     <div class="placeholder-panel">
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
         <circle cx="20" cy="20" r="18" stroke="#30363d" stroke-width="2"/>
         <circle cx="20" cy="20" r="4" fill="#58a6ff" opacity="0.5"/>
       </svg>
-      <h3>Select a Node</h3>
-      <p>Click any file in the graph to see its details, imports, and connections.</p>
+      <h3>Follow the Code Flow</h3>
+      <p>Use <strong>Flow Layout</strong> to read the project from <strong>Start</strong> to <strong>Main</strong> to <strong>Core</strong> to <strong>Helpers</strong>. Click any file to inspect how it connects.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:8px">
+        \${['start', 'main', 'core', 'helpers'].map(stage => \`
+          <div class="stat-card" style="text-align:left">
+            <div class="node-stage-badge" style="margin-top:0">
+              <span class="dot" style="background:\${stageColor(stage)}"></span>
+              \${stageLabel(stage)}
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:#e6edf3">\${fmtNum(stages[stage] || 0)} files</div>
+          </div>
+        \`).join('')}
+      </div>
     </div>
   \`;
 }
@@ -1509,6 +1875,10 @@ function renderNodePanel(node) {
       <div>
         <h3>\${escHtml(node.label)}</h3>
         <div class="node-path">\${escHtml(node.relativePath)}</div>
+        <div class="node-stage-badge">
+          <span class="dot" style="background:\${stageColor(node.stage)}"></span>
+          \${escHtml(stageLabel(node.stage))}
+        </div>
       </div>
     </div>
 
@@ -1531,9 +1901,38 @@ function renderNodePanel(node) {
       </div>
     </div>
 
+    <div class="section-title">
+      Role In Flow
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.55;color:var(--text-muted)">
+      This file is grouped in <strong style="color:\${stageColor(node.stage)}">\${escHtml(stageLabel(node.stage))}</strong>.
+      \${node.stage === 'start' ? 'It looks like an entry point that starts or wires the app.' : ''}
+      \${node.stage === 'main' ? 'It looks like an orchestration file that connects the app to core logic.' : ''}
+      \${node.stage === 'core' ? 'It looks like part of the main business logic or engine of the project.' : ''}
+      \${node.stage === 'helpers' ? 'It looks like support code such as utils, config, client adapters, or shared helpers.' : ''}
+    </div>
+
+    <div class="section-title">
+      AI Summary
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.55;color:var(--text-muted)">
+      \${escHtml(node.summary || 'No summary available yet.')}
+    </div>
+
     <button class="open-file-btn" onclick="vscodeApi.postMessage({command:'openFile',filePath:\${JSON.stringify(node.path)}})">
       Open File ↗
     </button>
+
+    \${(node.functions?.length || node.classes?.length || node.exports?.length) ? \`
+      <div class="section-title">
+        Symbols
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        \${(node.functions || []).slice(0, 10).map(name => \`<span class="ext-badge" style="background:#3fb95018;color:#3fb950;border:1px solid #3fb95033">fn \${escHtml(name)}</span>\`).join('')}
+        \${(node.classes || []).slice(0, 8).map(name => \`<span class="ext-badge" style="background:#d2a8ff18;color:#d2a8ff;border:1px solid #d2a8ff33">class \${escHtml(name)}</span>\`).join('')}
+        \${(node.exports || []).slice(0, 8).map(name => \`<span class="ext-badge" style="background:#58a6ff18;color:#58a6ff;border:1px solid #58a6ff33">export \${escHtml(name)}</span>\`).join('')}
+      </div>
+    \` : ''}
 
     <div class="section-title">
       Imports <span class="count">\${imports.length}</span>
@@ -1570,13 +1969,51 @@ function renderNodePanel(node) {
 function renderStatsPanel() {
   if (!graphData) return;
   const s = graphData.stats || {};
+  const recommendedLayout = engine?.pickInitialLayout?.() || 'force';
 
   document.getElementById('panel-content').innerHTML = \`
+    <div style="background:linear-gradient(135deg, rgba(88,166,255,0.14), rgba(63,185,80,0.08));border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)">Graph Guide</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-top:6px">Best view for this repo: \${escHtml(recommendedLayout)}</div>
+      <div style="font-size:12px;line-height:1.55;color:var(--text-muted);margin-top:6px">
+        \${recommendedLayout === 'folder' ? 'This workspace is dense enough that folder groups will usually be easier to read than a force map.' : ''}
+        \${recommendedLayout === 'radial' ? 'This workspace has enough connections that radial layout gives a clearer center-to-edge shape.' : ''}
+        \${recommendedLayout === 'flow' ? 'This workspace is a good fit for flow layout when you want a start-to-core reading path.' : ''}
+        \${recommendedLayout === 'force' ? 'This workspace is small enough that the free-force layout should stay readable.' : ''}
+      </div>
+    </div>
+
     <div class="section-title">Overview</div>
     <div class="stat-row"><span class="label">Total Files</span><span class="value">\${s.totalFiles || 0}</span></div>
     <div class="stat-row"><span class="label">Total Lines</span><span class="value">\${fmtNum(s.totalLines || 0)}</span></div>
     <div class="stat-row"><span class="label">Dependencies</span><span class="value">\${s.totalEdges || 0}</span></div>
     <div class="stat-row"><span class="label">Languages</span><span class="value">\${(s.languages || []).join(', ') || '—'}</span></div>
+
+    \${s.projectIndex ? \`
+      <div class="section-title" style="margin-top:16px">AI Context Index</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.55;color:var(--text-muted)">
+        CodeAtlas saved a compact project map for AI-friendly context reuse.
+        <div style="margin-top:8px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;word-break:break-all">\${escHtml(s.projectIndex.relativePath || s.projectIndex.path)}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <span class="ext-badge" style="background:#58a6ff18;color:#58a6ff;border:1px solid #58a6ff33">\${fmtNum(s.projectIndex.fileCount || 0)} files</span>
+          <span class="ext-badge" style="background:#3fb95018;color:#3fb950;border:1px solid #3fb95033">saved locally</span>
+        </div>
+      </div>
+      <button class="open-file-btn" style="margin-bottom:4px" onclick="vscodeApi.postMessage({command:'openFile',filePath:\${JSON.stringify(s.projectIndex.path)}})">
+        Open Index JSON ↗
+      </button>
+    \` : ''}
+
+    <div class="section-title" style="margin-top:16px">Architecture Flow</div>
+    \${['start', 'main', 'core', 'helpers'].map(stage => \`
+      <div class="stat-row">
+        <span class="label" style="display:flex;align-items:center;gap:8px">
+          <span class="legend-dot" style="background:\${stageColor(stage)}"></span>
+          \${stageLabel(stage)}
+        </span>
+        <span class="value">\${s.flowStages?.[stage] || 0}</span>
+      </div>
+    \`).join('')}
 
     <div class="section-title" style="margin-top:16px">File Types</div>
     \${Object.entries(s.fileTypes || {}).filter(([,v])=>v>0).map(([t,v]) => {

@@ -6,14 +6,14 @@ const { GraphPanel } = require('./Graphpanel');
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  console.log('Codebase Visualizer is now active');
+  console.log('CodeAtlas is now active');
 
   let currentPanel = undefined;
 
   const showCommand = vscode.commands.registerCommand('codebaseVisualizer.show', async () => {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
-      vscode.window.showErrorMessage('Codebase Visualizer: Please open a workspace folder first.');
+      vscode.window.showErrorMessage('CodeAtlas: Please open a workspace folder first.');
       return;
     }
 
@@ -33,7 +33,7 @@ function activate(context) {
     try {
       vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: "Codebase Visualizer",
+        title: "CodeAtlas",
         cancellable: false
       }, async (progress) => {
         progress.report({ message: "Scanning files..." });
@@ -58,7 +58,7 @@ function activate(context) {
       });
     } catch (error) {
       currentPanel.setLoading(false);
-      vscode.window.showErrorMessage(`Codebase Visualizer: Analysis failed - ${error.message}`);
+      vscode.window.showErrorMessage(`CodeAtlas: Analysis failed - ${error.message}`);
     }
   });
 

@@ -61,10 +61,25 @@ const RESOLVABLE_EXTENSIONS = [
   '.java', '.cs', '.rb', '.php'
 ];
 
+const FLOW_STAGE_COLORS = {
+  start: '#ffa657',
+  main: '#58a6ff',
+  core: '#3fb950',
+  helpers: '#d2a8ff',
+};
+
 function shouldExclude(filePath, excludePatterns) {
   const normalized = filePath.replace(/\\/g, '/');
   return excludePatterns.some(pattern => {
-    const regex = new RegExp(`(^|/)${pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')}(/|$)`);
+    const cleanedPattern = String(pattern || '')
+      .trim()
+      .replace(/\/+$/g, '')
+      .replace(/\.{3,}$/g, '')
+      .replace(/^\.\/+/g, '');
+
+    if (!cleanedPattern) return false;
+
+    const regex = new RegExp(`(^|/)${cleanedPattern.replace(/\./g, '\\.').replace(/\*/g, '.*')}(/|$)`);
     return regex.test(normalized);
   });
 }
@@ -112,7 +127,52 @@ function packageNameFromImport(importPath) {
   return importPath.split('/')[0];
 }
 
+function extractPythonImports(content) {
+  const imports = new Set();
+  const addImport = value => {
+    const normalized = (value || '').trim().replace(/\s+/g, '');
+    if (normalized && normalized !== '.') {
+      imports.add(normalized);
+    }
+  };
+
+  const importMatches = content.matchAll(/^\s*import\s+([^\n#]+)/gm);
+  for (const match of importMatches) {
+    const parts = match[1]
+      .split(',')
+      .map(part => part.trim().split(/\s+as\s+/i)[0]?.trim())
+      .filter(Boolean);
+
+    for (const part of parts) {
+      addImport(part);
+    }
+  }
+
+  const fromMatches = content.matchAll(/^\s*from\s+([.\w]+)\s+import\s+([^\n#]+)/gm);
+  for (const match of fromMatches) {
+    const modulePath = (match[1] || '').trim();
+    const importedSymbols = (match[2] || '')
+      .replace(/[()]/g, '')
+      .split(',')
+      .map(part => part.trim().split(/\s+as\s+/i)[0]?.trim())
+      .filter(Boolean);
+
+    addImport(modulePath);
+
+    for (const symbol of importedSymbols) {
+      if (symbol === '*') continue;
+      addImport(modulePath ? `${modulePath}.${symbol}` : symbol);
+    }
+  }
+
+  return [...imports];
+}
+
 function extractImports(content, filePath, lang) {
+  if (lang === 'py') {
+    return extractPythonImports(content);
+  }
+
   const patterns = IMPORT_PATTERNS[lang] || [];
   const imports = new Set();
 
@@ -139,10 +199,51 @@ function resolveCandidate(candidatePath, allFilePathSet) {
     if (allFilePathSet.has(indexPath)) return indexPath;
   }
 
+  if (allFilePathSet.has(path.join(candidatePath, '__init__.py'))) {
+    return path.join(candidatePath, '__init__.py');
+  }
+
   return null;
 }
 
-function resolveImport(importPath, fromFile, allFilePathSet, rootPath) {
+function resolvePythonImport(importPath, fromFile, allFilePathSet, rootPath) {
+  const candidatePaths = [];
+  const match = importPath.match(/^(\.+)?(.*)$/);
+  const leadingDots = match?.[1] || '';
+  const remainder = (match?.[2] || '').trim();
+
+  if (leadingDots) {
+    let baseDir = path.dirname(fromFile);
+    const parentLevels = Math.max(leadingDots.length - 1, 0);
+    for (let i = 0; i < parentLevels; i++) {
+      baseDir = path.dirname(baseDir);
+    }
+
+    if (remainder) {
+      candidatePaths.push(path.join(baseDir, ...remainder.split('.').filter(Boolean)));
+    } else {
+      candidatePaths.push(baseDir);
+    }
+  } else if (remainder) {
+    candidatePaths.push(path.join(rootPath, ...remainder.split('.').filter(Boolean)));
+  }
+
+  for (const candidate of candidatePaths) {
+    const resolved = resolveCandidate(candidate, allFilePathSet);
+    if (resolved) return resolved;
+  }
+
+  return null;
+}
+
+function resolveImport(importPath, fromFile, allFilePathSet, rootPath, lang) {
+  if (lang === 'py') {
+    const resolvedPython = resolvePythonImport(importPath, fromFile, allFilePathSet, rootPath);
+    if (resolvedPython) {
+      return resolvedPython;
+    }
+  }
+
   const candidatePaths = [];
 
   if (importPath.startsWith('.') || importPath.startsWith('/')) {
@@ -177,6 +278,128 @@ function getFileStats(filePath) {
   }
 }
 
+function uniqueTrimmed(values) {
+  return [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))];
+}
+
+function extractSymbols(content, lang) {
+  if (!content) {
+    return { functions: [], classes: [], exports: [] };
+  }
+
+  const functions = [];
+  const classes = [];
+  const exports = [];
+
+  if (lang === 'js') {
+    functions.push(
+      ...[...content.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(match => match[1]),
+      ...[...content.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/g)].map(match => match[1]),
+      ...[...content.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?[A-Za-z_$][\w$]*\s*=>/g)].map(match => match[1]),
+      ...[...content.matchAll(/\bexport\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(match => match[1]),
+      ...[...content.matchAll(/\b([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g)]
+        .map(match => match[1])
+        .filter(name => !['if', 'for', 'while', 'switch', 'catch', 'function'].includes(name))
+    );
+    classes.push(...[...content.matchAll(/\bclass\s+([A-Za-z_$][\w$]*)/g)].map(match => match[1]));
+    exports.push(
+      ...[...content.matchAll(/\bexport\s+(?:default\s+)?(?:class|function|const|let|var)\s+([A-Za-z_$][\w$]*)/g)].map(match => match[1]),
+      ...[...content.matchAll(/\bmodule\.exports\s*=\s*([A-Za-z_$][\w$]*)/g)].map(match => match[1]),
+      ...[...content.matchAll(/\bexports\.([A-Za-z_$][\w$]*)\s*=/g)].map(match => match[1])
+    );
+  } else if (lang === 'py') {
+    functions.push(...[...content.matchAll(/^\s*def\s+([A-Za-z_][\w]*)\s*\(/gm)].map(match => match[1]));
+    classes.push(...[...content.matchAll(/^\s*class\s+([A-Za-z_][\w]*)\s*[\(:]/gm)].map(match => match[1]));
+    exports.push(...[...content.matchAll(/^__all__\s*=\s*\[([^\]]*)\]/gm)]
+      .flatMap(match => match[1].split(',').map(value => value.replace(/['"\s]/g, ''))));
+  }
+
+  return {
+    functions: uniqueTrimmed(functions).slice(0, 25),
+    classes: uniqueTrimmed(classes).slice(0, 15),
+    exports: uniqueTrimmed(exports).slice(0, 20),
+  };
+}
+
+function summarizeNode(node) {
+  const parts = [];
+  const stageText = node.stage === 'start'
+    ? 'Entry or startup logic'
+    : node.stage === 'core'
+      ? 'Core business logic'
+      : node.stage === 'helpers'
+        ? 'Support or shared utility code'
+        : 'Main orchestration code';
+
+  parts.push(stageText);
+
+  if (node.classes?.length) {
+    parts.push(`Classes: ${node.classes.slice(0, 3).join(', ')}`);
+  }
+
+  if (node.functions?.length) {
+    parts.push(`Functions: ${node.functions.slice(0, 4).join(', ')}`);
+  }
+
+  if (!node.classes?.length && !node.functions?.length) {
+    parts.push(`Type: ${node.fileType}`);
+  }
+
+  return parts.join('. ');
+}
+
+function buildProjectIndex(rootPath, nodes, edges, stats) {
+  const edgeSources = new Map();
+  const edgeTargets = new Map();
+
+  for (const edge of edges) {
+    if (!edgeSources.has(edge.source)) edgeSources.set(edge.source, []);
+    if (!edgeTargets.has(edge.target)) edgeTargets.set(edge.target, []);
+    edgeSources.get(edge.source).push(edge.target);
+    edgeTargets.get(edge.target).push(edge.source);
+  }
+
+  return {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    rootPath,
+    summary: {
+      totalFiles: stats.totalFiles,
+      totalEdges: stats.totalEdges,
+      totalLines: stats.totalLines,
+      languages: stats.languages,
+      flowStages: stats.flowStages,
+    },
+    files: nodes.map(node => ({
+      path: node.relativePath,
+      fileType: node.fileType,
+      stage: node.stage,
+      lang: node.lang,
+      ext: node.ext,
+      lines: node.lines,
+      size: node.size,
+      summary: node.summary,
+      functions: node.functions || [],
+      classes: node.classes || [],
+      exports: node.exports || [],
+      imports: (edgeSources.get(node.id) || [])
+        .map(target => path.relative(rootPath, target).replace(/\\/g, '/'))
+        .slice(0, 50),
+      usedBy: (edgeTargets.get(node.id) || [])
+        .map(source => path.relative(rootPath, source).replace(/\\/g, '/'))
+        .slice(0, 50),
+    })),
+  };
+}
+
+function saveProjectIndex(rootPath, projectIndex) {
+  const indexDir = path.join(rootPath, '.codeatlas');
+  const indexPath = path.join(indexDir, 'project-index.json');
+  fs.mkdirSync(indexDir, { recursive: true });
+  fs.writeFileSync(indexPath, JSON.stringify(projectIndex, null, 2), 'utf8');
+  return indexPath;
+}
+
 function detectFileType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const base = path.basename(filePath).toLowerCase();
@@ -189,12 +412,35 @@ function detectFileType(filePath) {
   return 'module';
 }
 
+function detectFlowStage(relativePath, label, fileType) {
+  const rel = relativePath.toLowerCase();
+  const name = label.toLowerCase();
+  const helperPattern = /(helper|helpers|util|utils|common|shared|types|typing|schema|constant|constants|format|formatter|parser|client|adapter|plugin|config|setting|settings|hook|hooks|theme|style|styles)/;
+  const corePattern = /(core|engine|service|services|domain|model|models|memory|brain|store|state|logic|kernel|analysis|trainer|repo|repository|manager|pipeline)/;
+  const startPattern = /(main|app|index|server|cli|run|bootstrap|entry|__main__)/;
+
+  if (fileType === 'entry' || startPattern.test(name) || /(^|\/)(main|app|index|server|cli|run|bootstrap)(\.[^/]+)?$/.test(rel)) {
+    return 'start';
+  }
+
+  if (helperPattern.test(rel) || fileType === 'config' || fileType === 'style' || fileType === 'docs') {
+    return 'helpers';
+  }
+
+  if (corePattern.test(rel)) {
+    return 'core';
+  }
+
+  return 'main';
+}
+
 async function analyzeWorkspace(rootPath, options = {}) {
   const {
-    excludePatterns = ['node_modules', '.git', 'dist', 'build'],
+    excludePatterns = ['venv', '.venv', 'node_modules', '__pycache__', '.git', 'dist', 'build'],
     maxFiles = 500,
     includeExtensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.vue', '.svelte'],
-    onProgress = () => {}
+    onProgress = () => {},
+    saveIndex = true,
   } = options;
 
   onProgress('Scanning directory tree...');
@@ -220,8 +466,10 @@ async function analyzeWorkspace(rootPath, options = {}) {
 
     const { lines, size, content } = getFileStats(filePath);
     const fileType = detectFileType(filePath);
+    const stage = detectFlowStage(relPath, path.basename(filePath), fileType);
+    const symbols = extractSymbols(content, lang);
 
-    nodes.push({
+    const node = {
       id: filePath,
       label: path.basename(filePath),
       path: filePath,
@@ -232,17 +480,25 @@ async function analyzeWorkspace(rootPath, options = {}) {
       lines,
       size,
       color: FILE_TYPE_COLORS[ext] || FILE_TYPE_COLORS.default,
+      stage,
+      stageColor: FLOW_STAGE_COLORS[stage],
       folder: path.dirname(relPath),
+      functions: symbols.functions,
+      classes: symbols.classes,
+      exports: symbols.exports,
       imports: [],
       importedBy: [],
-    });
+    };
+
+    node.summary = summarizeNode(node);
+    nodes.push(node);
 
     if (lang && content) {
       const imports = extractImports(content, filePath, lang);
       const resolvedNode = nodes[nodes.length - 1];
 
       for (const imp of imports) {
-        const resolved = resolveImport(imp, filePath, allFilePathSet, rootPath);
+        const resolved = resolveImport(imp, filePath, allFilePathSet, rootPath, lang);
         if (resolved) {
           const edgeKey = `${filePath}→${resolved}`;
           if (!edgeSet.has(edgeKey)) {
@@ -305,7 +561,26 @@ async function analyzeWorkspace(rootPath, options = {}) {
       ])
     ),
     folders: [...folders.values()].sort((a, b) => b.files - a.files).slice(0, 20),
+    flowStages: {
+      start: nodes.filter(n => n.stage === 'start').length,
+      main: nodes.filter(n => n.stage === 'main').length,
+      core: nodes.filter(n => n.stage === 'core').length,
+      helpers: nodes.filter(n => n.stage === 'helpers').length,
+    },
   };
+
+  let projectIndexPath = null;
+  if (saveIndex) {
+    onProgress('Saving project index...');
+    const projectIndex = buildProjectIndex(rootPath, nodes, edges, stats);
+    projectIndexPath = saveProjectIndex(rootPath, projectIndex);
+    stats.projectIndex = {
+      path: projectIndexPath,
+      relativePath: path.relative(rootPath, projectIndexPath).replace(/\\/g, '/'),
+      fileCount: projectIndex.files.length,
+      generatedAt: projectIndex.generatedAt,
+    };
+  }
 
   return { nodes, edges, stats, rootPath };
 }

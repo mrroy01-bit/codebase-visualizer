@@ -1,9 +1,17 @@
 {
-  "name": "codebase-visualizer",
-  "displayName": "Codebase Visualizer",
-  "description": "Analyze an entire workspace and explore file dependencies, module connections, and project structure in an interactive VS Code graph.",
-  "version": "0.0.1",
+  "name": "codeatlas-visualizer",
+  "displayName": "CodeAtlas Visualizer",
+  "description": "Visualize your codebase in VS Code with an interactive dependency graph, file relationship map, module explorer, and project structure analyzer.",
+  "version": "0.0.6",
   "publisher": "mrRoy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mrroy01-bit/codebase-visualizer.git"
+  },
+  "homepage": "https://github.com/mrroy01-bit/codebase-visualizer",
+  "bugs": {
+    "url": "https://github.com/mrroy01-bit/codebase-visualizer/issues"
+  },
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -21,22 +29,25 @@
     "commands": [
       {
         "command": "codebaseVisualizer.show",
-        "title": "Codebase Visualizer: Open Project Graph",
-        "category": "Codebase Visualizer"
+        "title": "Open Project Graph",
+        "category": "CodeAtlas"
       },
       {
         "command": "codebaseVisualizer.refresh",
-        "title": "Codebase Visualizer: Refresh Project Graph",
-        "category": "Codebase Visualizer"
+        "title": "Refresh Project Graph",
+        "category": "CodeAtlas"
       }
     ],
     "configuration": {
-      "title": "Codebase Visualizer",
+      "title": "CodeAtlas",
       "properties": {
         "codebaseVisualizer.excludePatterns": {
           "type": "array",
           "default": [
+            "venv",
+            ".venv",
             "node_modules",
+            "__pycache__",
             ".git",
             "dist",
             "build",
@@ -77,15 +88,28 @@
   },
   "scripts": {
     "lint": "node -e \"console.log('No lint step configured yet.')\"",
-    "package": "npx @vscode/vsce package",
-    "publish": "npx @vscode/vsce publish"
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "publish": "npx @vscode/vsce publish --no-dependencies"
   },
   "keywords": [
     "graph",
     "dependency",
     "visualizer",
     "architecture",
-    "workspace"
+    "workspace",
+    "codebase",
+    "dependency graph",
+    "file dependencies",
+    "project structure",
+    "import graph",
+    "module graph",
+    "software architecture",
+    "code visualization",
+    "typescript",
+    "javascript",
+    "python",
+    "developer tools",
+    "explorer"
   ],
   "license": "MIT",
   "preview": true,

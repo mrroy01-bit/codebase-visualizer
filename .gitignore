@@ -1,0 +1,29 @@
+.codex
+
+# Dependencies
+node_modules/
+
+# Packaged extension output
+*.vsix
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Local VS Code settings
+.vscode/
+
+# Generated CodeAtlas index
+.codeatlas/
