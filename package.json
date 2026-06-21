@@ -2,7 +2,7 @@
   "name": "codeatlas-visualizer",
   "displayName": "CodeAtlas Visualizer",
   "description": "Visualize your codebase in VS Code with an interactive dependency graph, file relationship map, module explorer, and project structure analyzer.",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "publisher": "mrRoy",
   "repository": {
     "type": "git",
@@ -112,7 +112,6 @@
     "explorer"
   ],
   "license": "MIT",
-  "preview": true,
   "devDependencies": {
     "@vscode/vsce": "^3.9.1"
   }

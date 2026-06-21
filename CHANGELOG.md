@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.8
+
+- Added Dead Code Detection — marks files with zero incoming dependencies (excluding entry points) and orphan files with no connections
+- Added Circular Dependency Detection using Tarjan's SCC algorithm with visual indicator and list view
+- Added Hotspot Analysis — scores every file by imports, dependents, and size; classifies as low/medium/high/critical
+- Added Project Health Score — aggregated metric (0–100) based on dead files, circular groups, and critical hotspots
+- Added View Mode toggle with Normal, Hotspots (color by risk level), and Dead Code (highlight unused files)
+- Added Health tab in side panel with dead files list, circular dependencies, top hotspots, and health score ring
+- Added warning banner for unused files
+- Added hotspot score display in node detail panel
+
+## 0.0.7
+
+- Improved graph filtering and legend clarity with real extension-level labels like `.js`, `.ts`, and `.tsx`
+- Added collaboration status and impact insight cards in the file details sidebar to surface shared, isolated, and high-impact files faster
+- Removed preview manifest mode and prepared the extension metadata for a public Marketplace release
+
 ## 0.0.6
 
 - Added a guided screenshot walkthrough in the README using real `media/preview` images

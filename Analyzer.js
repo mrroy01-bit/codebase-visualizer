@@ -1,6 +1,186 @@
 const fs = require('fs');
 const path = require('path');
 
+function stripJsonComments(jsonText) {
+  if (!jsonText) return '';
+
+  let output = '';
+  let inString = false;
+  let stringQuote = null;
+  let escaped = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < jsonText.length; i++) {
+    const ch = jsonText[i];
+    const next = jsonText[i + 1];
+
+    if (inLineComment) {
+      if (ch === '\n') {
+        inLineComment = false;
+        output += ch;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (inString) {
+      output += ch;
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === stringQuote) {
+        inString = false;
+        stringQuote = null;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      inString = true;
+      stringQuote = ch;
+      output += ch;
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+
+    output += ch;
+  }
+
+  return output;
+}
+
+function stripTrailingCommas(jsonText) {
+  if (!jsonText) return '';
+
+  let output = '';
+  let inString = false;
+  let stringQuote = null;
+  let escaped = false;
+
+  for (let i = 0; i < jsonText.length; i++) {
+    const ch = jsonText[i];
+
+    if (inString) {
+      output += ch;
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === stringQuote) {
+        inString = false;
+        stringQuote = null;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      inString = true;
+      stringQuote = ch;
+      output += ch;
+      continue;
+    }
+
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < jsonText.length && /\s/.test(jsonText[j])) j++;
+      const nextNonWs = jsonText[j];
+      if (nextNonWs === '}' || nextNonWs === ']') {
+        continue;
+      }
+    }
+
+    output += ch;
+  }
+
+  return output;
+}
+
+function readJsoncFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const sanitized = stripTrailingCommas(stripJsonComments(raw));
+    return JSON.parse(sanitized);
+  } catch (e) {
+    return null;
+  }
+}
+
+function buildTsPathAliasMatchers(rootPath) {
+  const configs = [
+    readJsoncFile(path.join(rootPath, 'tsconfig.json')),
+    readJsoncFile(path.join(rootPath, 'jsconfig.json')),
+  ].filter(Boolean);
+
+  const matchers = [];
+  for (const cfg of configs) {
+    const compilerOptions = cfg.compilerOptions || {};
+    const paths = compilerOptions.paths || {};
+    const baseUrl = compilerOptions.baseUrl || '.';
+    const baseDir = path.resolve(rootPath, baseUrl);
+
+    for (const [aliasPattern, targetPatternsRaw] of Object.entries(paths)) {
+      const targetPatterns = Array.isArray(targetPatternsRaw) ? targetPatternsRaw : [targetPatternsRaw];
+      if (!targetPatterns.length) continue;
+
+      matchers.push({
+        aliasPattern: String(aliasPattern),
+        targetPatterns: targetPatterns.map(p => String(p)),
+        baseDir,
+      });
+    }
+  }
+
+  return matchers;
+}
+
+function matchAliasPattern(importPath, aliasPattern) {
+  if (!importPath || !aliasPattern) return null;
+
+  if (aliasPattern === importPath) {
+    return '';
+  }
+
+  const starIndex = aliasPattern.indexOf('*');
+  if (starIndex === -1) return null;
+
+  const prefix = aliasPattern.slice(0, starIndex);
+  const suffix = aliasPattern.slice(starIndex + 1);
+
+  if (!importPath.startsWith(prefix)) return null;
+  if (suffix && !importPath.endsWith(suffix)) return null;
+
+  return importPath.slice(prefix.length, suffix ? importPath.length - suffix.length : importPath.length);
+}
+
 // Import regex patterns per language
 const IMPORT_PATTERNS = {
   js: [
@@ -236,7 +416,7 @@ function resolvePythonImport(importPath, fromFile, allFilePathSet, rootPath) {
   return null;
 }
 
-function resolveImport(importPath, fromFile, allFilePathSet, rootPath, lang) {
+function resolveImport(importPath, fromFile, allFilePathSet, rootPath, lang, aliasMatchers = []) {
   if (lang === 'py') {
     const resolvedPython = resolvePythonImport(importPath, fromFile, allFilePathSet, rootPath);
     if (resolvedPython) {
@@ -249,6 +429,21 @@ function resolveImport(importPath, fromFile, allFilePathSet, rootPath, lang) {
   if (importPath.startsWith('.') || importPath.startsWith('/')) {
     candidatePaths.push(path.resolve(path.dirname(fromFile), importPath));
   } else {
+    for (const matcher of aliasMatchers) {
+      const captured = matchAliasPattern(importPath, matcher.aliasPattern);
+      if (captured === null) continue;
+
+      for (const targetPattern of matcher.targetPatterns) {
+        const replaced = targetPattern.includes('*')
+          ? targetPattern.replace('*', captured)
+          : targetPattern;
+
+        const candidate = path.resolve(matcher.baseDir, replaced);
+        const resolved = resolveCandidate(candidate, allFilePathSet);
+        if (resolved) return resolved;
+      }
+    }
+
     candidatePaths.push(path.resolve(rootPath, importPath));
 
     if (importPath.startsWith('@/')) {
@@ -348,6 +543,53 @@ function summarizeNode(node) {
   return parts.join('. ');
 }
 
+function classifyCollaboration(importCount, importedByCount, crossStageLinks) {
+  const totalLinks = importCount + importedByCount;
+
+  if (totalLinks === 0) {
+    return {
+      status: 'isolated',
+      impact: 'solo',
+      summary: 'No local collaboration links yet.',
+      score: 0,
+    };
+  }
+
+  if (crossStageLinks >= 3 || (importCount >= 4 && importedByCount >= 4)) {
+    return {
+      status: 'collaborative',
+      impact: 'bridge',
+      summary: 'Connects multiple parts of the code flow.',
+      score: totalLinks + crossStageLinks * 2,
+    };
+  }
+
+  if (importedByCount >= 6) {
+    return {
+      status: 'collaborative',
+      impact: 'hub',
+      summary: 'A shared dependency reused by many files.',
+      score: totalLinks + crossStageLinks,
+    };
+  }
+
+  if (importCount >= 6) {
+    return {
+      status: 'active',
+      impact: 'orchestrator',
+      summary: 'Pulls together several files to do its work.',
+      score: totalLinks + crossStageLinks,
+    };
+  }
+
+  return {
+    status: 'connected',
+    impact: 'leaf',
+    summary: 'Part of the local code flow with a focused role.',
+    score: totalLinks + crossStageLinks,
+  };
+}
+
 function buildProjectIndex(rootPath, nodes, edges, stats) {
   const edgeSources = new Map();
   const edgeTargets = new Map();
@@ -378,6 +620,14 @@ function buildProjectIndex(rootPath, nodes, edges, stats) {
       ext: node.ext,
       lines: node.lines,
       size: node.size,
+      collaboration: node.collaboration || null,
+      crossStageLinks: node.crossStageLinks || 0,
+      impactScore: node.impactScore || 0,
+      isDeadCode: node.isDeadCode,
+      isOrphan: node.isOrphan,
+      isCircular: node.isCircular,
+      hotspotScore: Math.round(node.hotspotScore || 0),
+      hotspotLevel: node.hotspotLevel || 'low',
       summary: node.summary,
       functions: node.functions || [],
       classes: node.classes || [],
@@ -434,6 +684,62 @@ function detectFlowStage(relativePath, label, fileType) {
   return 'main';
 }
 
+function detectCircularDependencies(nodes, edges) {
+  const adj = new Map();
+  for (const n of nodes) adj.set(n.id, []);
+  for (const e of edges) {
+    if (adj.has(e.source) && adj.has(e.target)) {
+      adj.get(e.source).push(e.target);
+    }
+  }
+
+  let index = 0;
+  const stack = [];
+  const onStack = new Set();
+  const indices = new Map();
+  const lowlink = new Map();
+  const circular = new Set();
+  let groupCount = 0;
+
+  function strongconnect(v) {
+    indices.set(v, index);
+    lowlink.set(v, index);
+    index++;
+    stack.push(v);
+    onStack.add(v);
+
+    for (const w of adj.get(v) || []) {
+      if (!indices.has(w)) {
+        strongconnect(w);
+        lowlink.set(v, Math.min(lowlink.get(v), lowlink.get(w)));
+      } else if (onStack.has(w)) {
+        lowlink.set(v, Math.min(lowlink.get(v), indices.get(w)));
+      }
+    }
+
+    if (lowlink.get(v) === indices.get(v)) {
+      const scc = [];
+      let w;
+      do {
+        w = stack.pop();
+        onStack.delete(w);
+        scc.push(w);
+      } while (w !== v);
+
+      if (scc.length > 1 || edges.some(e => e.source === v && e.target === v)) {
+        groupCount++;
+        for (const id of scc) circular.add(id);
+      }
+    }
+  }
+
+  for (const n of nodes) {
+    if (!indices.has(n.id)) strongconnect(n.id);
+  }
+
+  return { circular, groupCount };
+}
+
 async function analyzeWorkspace(rootPath, options = {}) {
   const {
     excludePatterns = ['venv', '.venv', 'node_modules', '__pycache__', '.git', 'dist', 'build'],
@@ -446,6 +752,9 @@ async function analyzeWorkspace(rootPath, options = {}) {
   onProgress('Scanning directory tree...');
   const allFiles = getAllFiles(rootPath, excludePatterns, includeExtensions, maxFiles);
   const allFilePathSet = new Set(allFiles);
+
+  // Build TS/JS path alias resolvers for React/Vite/TS projects.
+  const aliasMatchers = buildTsPathAliasMatchers(rootPath);
 
   onProgress(`Found ${allFiles.length} files. Analyzing dependencies...`);
 
@@ -498,7 +807,7 @@ async function analyzeWorkspace(rootPath, options = {}) {
       const resolvedNode = nodes[nodes.length - 1];
 
       for (const imp of imports) {
-        const resolved = resolveImport(imp, filePath, allFilePathSet, rootPath, lang);
+        const resolved = resolveImport(imp, filePath, allFilePathSet, rootPath, lang, aliasMatchers);
         if (resolved) {
           const edgeKey = `${filePath}→${resolved}`;
           if (!edgeSet.has(edgeKey)) {
@@ -525,6 +834,43 @@ async function analyzeWorkspace(rootPath, options = {}) {
     }
   }
 
+  for (const node of nodes) {
+    const neighborIds = [...new Set([...(node.imports || []), ...(node.importedBy || [])])];
+    const crossStageLinks = neighborIds.filter(id => {
+      const neighbor = nodeMap.get(id);
+      return neighbor && neighbor.stage !== node.stage;
+    }).length;
+    const collaboration = classifyCollaboration(
+      node.imports.length,
+      node.importedBy.length,
+      crossStageLinks
+    );
+
+    node.crossStageLinks = crossStageLinks;
+    node.collaboration = collaboration;
+    node.impactScore = collaboration.score;
+
+    node.isDeadCode = node.importedBy.length === 0 && node.stage !== 'start';
+    node.isOrphan = node.imports.length === 0 && node.importedBy.length === 0;
+  }
+
+  const { circular, groupCount: circularGroupCount } = detectCircularDependencies(nodes, edges);
+  for (const node of nodes) {
+    node.isCircular = circular.has(node.id);
+  }
+
+  for (const node of nodes) {
+    node.hotspotScore = node.imports.length * 2 + node.importedBy.length * 3 + Math.log(node.lines + 1);
+    if (node.hotspotScore > 60) node.hotspotLevel = 'critical';
+    else if (node.hotspotScore > 30) node.hotspotLevel = 'high';
+    else if (node.hotspotScore > 10) node.hotspotLevel = 'medium';
+    else node.hotspotLevel = 'low';
+  }
+
+  const deadList = nodes.filter(n => n.isDeadCode);
+  const orphanList = nodes.filter(n => n.isOrphan);
+  const criticalHotspots = nodes.filter(n => n.hotspotLevel === 'critical');
+
   // Build folder structure
   const folders = new Map();
   for (const node of nodes) {
@@ -537,24 +883,76 @@ async function analyzeWorkspace(rootPath, options = {}) {
     f.lines += node.lines;
   }
 
+  const deadCount = deadList.length;
+  const orphanCount = orphanList.length;
+  const criticalCount = criticalHotspots.length;
+  const healthScore = Math.max(0, Math.min(100,
+    100 - deadCount * 0.5 - circularGroupCount * 5 - criticalCount * 2
+  ));
+
   // Compute stats
   const stats = {
     totalFiles: nodes.length,
     totalEdges: edges.length,
     totalLines: nodes.reduce((s, n) => s + n.lines, 0),
     averageDependencies: nodes.length ? Math.round((edges.length / nodes.length) * 10) / 10 : 0,
-    orphanFiles: nodes.filter(n => n.imports.length === 0 && n.importedBy.length === 0).length,
+    orphanFiles: orphanCount,
     entryPoints: nodes.filter(n => n.fileType === 'entry').length,
+    deadFiles: deadCount,
+    circularGroupCount,
+    healthScore: Math.round(healthScore),
     languages: [...new Set(nodes.map(n => n.lang).filter(Boolean))],
     topImported: nodes
       .filter(n => n.importedBy.length > 0)
       .sort((a, b) => b.importedBy.length - a.importedBy.length)
       .slice(0, 10)
       .map(n => ({ label: n.label, count: n.importedBy.length, path: n.relativePath })),
+    hotspotLevels: {
+      low: nodes.filter(n => n.hotspotLevel === 'low').length,
+      medium: nodes.filter(n => n.hotspotLevel === 'medium').length,
+      high: nodes.filter(n => n.hotspotLevel === 'high').length,
+      critical: criticalCount,
+    },
+    topHotspots: [...nodes]
+      .sort((a, b) => b.hotspotScore - a.hotspotScore)
+      .slice(0, 10)
+      .map(n => ({
+        label: n.label,
+        path: n.relativePath,
+        score: Math.round(n.hotspotScore),
+        imports: n.imports.length,
+        importedBy: n.importedBy.length,
+        lines: n.lines,
+        level: n.hotspotLevel,
+        id: n.id,
+      })),
+    deadCodeNodes: deadList.slice(0, 30).map(n => ({
+      label: n.label,
+      path: n.relativePath,
+      id: n.id,
+      stage: n.stage,
+    })),
+    circularNodes: nodes.filter(n => n.isCircular).slice(0, 20).map(n => ({
+      label: n.label,
+      path: n.relativePath,
+      id: n.id,
+    })),
     externalDeps: [...externalDeps.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 15)
       .map(([name, count]) => ({ name, count })),
+    extensions: [...nodes.reduce((map, node) => {
+      const key = node.ext || 'other';
+      if (!map.has(key)) {
+        map.set(key, { ext: key, count: 0, lines: 0, color: node.color });
+      }
+      const item = map.get(key);
+      item.count += 1;
+      item.lines += node.lines || 0;
+      return map;
+    }, new Map()).values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 16),
     fileTypes: Object.fromEntries(
       ['entry', 'module', 'test', 'config', 'style', 'docs'].map(t => [
         t, nodes.filter(n => n.fileType === t).length
@@ -566,6 +964,12 @@ async function analyzeWorkspace(rootPath, options = {}) {
       main: nodes.filter(n => n.stage === 'main').length,
       core: nodes.filter(n => n.stage === 'core').length,
       helpers: nodes.filter(n => n.stage === 'helpers').length,
+    },
+    collaboration: {
+      isolated: nodes.filter(n => n.collaboration?.status === 'isolated').length,
+      connected: nodes.filter(n => n.collaboration?.status === 'connected').length,
+      active: nodes.filter(n => n.collaboration?.status === 'active').length,
+      collaborative: nodes.filter(n => n.collaboration?.status === 'collaborative').length,
     },
   };
 

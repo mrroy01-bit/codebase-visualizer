@@ -67,6 +67,12 @@ You can open the generated project index directly and inspect the saved metadata
 - Architecture flow summary from Start to Main to Core to Helpers
 - Workspace stats for files, edges, lines, folders, and external packages
 - Local AI context index with per-file summaries, symbols, and dependency links
+- Dead Code Detection — finds unused, orphan, and circularly-dependent files
+- Hotspot Analysis — scores files by complexity, dependencies, and impact
+- Project Health Score — aggregated code quality metric (0–100)
+- View Modes — Normal, Hotspots (color by risk), Dead Code (highlight unused)
+- Health tab with dead file list, circular groups, and top hotspots
+- Warning banner for unused files
 - Export graph data as JSON
 - Refresh command for re-running analysis after code changes
 
@@ -91,6 +97,8 @@ Inside the graph view:
 - Change `Labels` mode to `Smart`, `Focus`, or `All` depending on graph density
 - Use the filter chips to show only selected file types
 - Use `Export` to save the analyzed graph as JSON
+- Use the **View** dropdown to switch between Normal, Hotspots (color by risk), and Dead Code (highlight unused files)
+- Open the **Health** tab in the side panel to see dead files, circular dependencies, hotspots, and project health score
 - Use `Refresh` after code changes to rebuild the graph
 
 If your project is large, increase `codebaseVisualizer.maxFiles` in VS Code settings.
@@ -106,6 +114,8 @@ The extension contributes these settings:
 ## How It Works
 
 The analyzer walks the current workspace, filters files by extension, extracts imports for supported languages, resolves local module references, and sends the resulting graph data into the visual explorer panel.
+
+For modern frontend projects (React, Vite, Next.js, etc.), CodeAtlas also resolves common TypeScript/JavaScript path aliases from `tsconfig.json` or `jsconfig.json` (`compilerOptions.paths` + `baseUrl`) so imports like `@/components/Button` can link to real files.
 
 It also builds a local project index at `.codeatlas/project-index.json` with compact per-file metadata such as:
 
@@ -145,6 +155,5 @@ The analyzer also contains parsing patterns for additional languages such as Go,
 
 ## Notes
 
-- The current manifest is marked as `preview` until you finish testing in a real Extension Development Host.
 - Very large repos may need a higher `codebaseVisualizer.maxFiles` value.
 - Marketplace ranking also improves over time with installs, ratings, reviews, and good release notes.

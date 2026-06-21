@@ -182,10 +182,19 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
 
     .filter-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-    .filter-chip {
+    #filter-chips {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 4px;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       padding: 3px 10px;
       border-radius: 20px;
       border: 1px solid var(--border);
@@ -194,6 +203,7 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
       cursor: pointer;
       transition: all 0.15s;
       user-select: none;
+      white-space: nowrap;
     }
 
     .filter-chip .chip-dot { width: 6px; height: 6px; border-radius: 50%; }
@@ -335,9 +345,11 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
       border-radius: 8px;
       padding: 10px 14px;
       font-size: 11px;
+      max-width: 220px;
     }
 
     #legend h4 { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; margin-bottom: 8px; }
+    .legend-section + .legend-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
     .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
     .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
@@ -454,6 +466,33 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
       border-radius: 999px;
     }
 
+    .meta-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0 14px;
+    }
+
+    .meta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .meta-pill strong {
+      color: var(--text);
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+
     .stat-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -493,6 +532,70 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
       border-radius: 20px;
       padding: 1px 6px;
       font-size: 10px;
+    }
+
+    .insight-card {
+      background: linear-gradient(135deg, rgba(88,166,255,0.08), rgba(63,185,80,0.04));
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .insight-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .insight-title strong {
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .insight-title span {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .insight-copy {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-muted);
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .mini-stat {
+      background: rgba(13,17,23,0.45);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .mini-stat strong {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .mini-stat span {
+      display: block;
+      margin-top: 3px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
     }
 
     .dep-list { display: flex; flex-direction: column; gap: 3px; }
@@ -537,6 +640,72 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
       margin: 2px;
       cursor: pointer;
     }
+
+    /* ── VIEW MODE ── */
+    #view-mode { min-width: 140px; }
+
+    /* ── HEALTH SCORE ── */
+    .health-score-ring {
+      width: 72px; height: 72px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+      border: 4px solid; flex-shrink: 0;
+      margin: 0 auto 12px;
+    }
+    .health-score-ring.good { border-color: #3fb950; color: #3fb950; }
+    .health-score-ring.ok { border-color: #58a6ff; color: #58a6ff; }
+    .health-score-ring.warn { border-color: #ffa657; color: #ffa657; }
+    .health-score-ring.bad { border-color: #f85149; color: #f85149; }
+
+    .health-stat-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+      cursor: pointer; transition: background 0.1s;
+    }
+    .health-stat-row:hover { background: var(--surface2); }
+    .health-stat-row:last-child { border-bottom: none; }
+    .health-stat-row .label { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+    .health-stat-row .label .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .health-stat-row .value { font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+
+    .dead-file-item, .circular-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; border-radius: 5px; cursor: pointer;
+      font-size: 12px; transition: background 0.1s;
+    }
+    .dead-file-item:hover, .circular-item:hover { background: var(--surface2); }
+    .dead-file-item .dead-icon { color: #f85149; font-size: 14px; }
+    .dead-file-item .dead-path { color: var(--text-muted); font-size: 10px; font-family: 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .hotspot-item {
+      padding: 8px 10px; border-radius: 6px; background: var(--surface2);
+      border: 1px solid var(--border); margin-bottom: 6px; cursor: pointer; transition: background 0.1s;
+    }
+    .hotspot-item:hover { background: var(--border); }
+    .hotspot-item .hs-top { display: flex; justify-content: space-between; align-items: center; }
+    .hotspot-item .hs-label { font-size: 12px; font-weight: 500; }
+    .hotspot-item .hs-score { font-size: 14px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .hotspot-item .hs-meta { display: flex; gap: 12px; margin-top: 4px; font-size: 10px; color: var(--text-muted); }
+    .hotspot-item .hs-level { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; padding: 1px 6px; border-radius: 4px; }
+    .hs-critical .hs-level { background: rgba(248,81,73,0.2); color: #f85149; }
+    .hs-high .hs-level { background: rgba(255,166,87,0.2); color: #ffa657; }
+    .hs-medium .hs-level { background: rgba(88,166,255,0.2); color: #58a6ff; }
+    .hs-low .hs-level { background: rgba(63,185,80,0.2); color: #3fb950; }
+
+    /* ── DEAD CODE WARNING BANNER ── */
+    #deadcode-warning {
+      display: none; align-items: center; gap: 8px;
+      padding: 8px 16px;
+      background: rgba(248,81,73,0.1);
+      border-bottom: 1px solid rgba(248,81,73,0.3);
+      flex-shrink: 0; font-size: 12px; color: #f85149;
+    }
+    #deadcode-warning strong { color: #f85149; }
+
+    /* ── HOTSPOT MODE LEGEND ── */
+    #hotspot-legend { display: none; }
+    #hotspot-legend .hl-item { display: flex; align-items: center; gap: 6px; font-size: 10px; margin-bottom: 2px; }
+    #hotspot-legend .hl-dot { width: 8px; height: 8px; border-radius: 50%; }
 
     /* Loading */
     #loading {
@@ -678,6 +847,12 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
     <option value="folder">Folder Groups</option>
   </select>
 
+  <select class="layout-select" id="view-mode">
+    <option value="normal">View: Normal</option>
+    <option value="hotspots">View: Hotspots</option>
+    <option value="deadcode">View: Dead Code</option>
+  </select>
+
   <div class="separator"></div>
 
   <div class="controls">
@@ -700,6 +875,7 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
   </div>
 </div>
 
+<div id="deadcode-warning">⚠ <strong id="deadcode-count">0</strong> files appear unused &mdash; <span id="deadcode-hint">switch to Dead Code view</span></div>
 <div id="flowbar"></div>
 <div id="summary-banner" style="display:flex;gap:10px;padding:10px 16px;background:rgba(88,166,255,0.06);border-bottom:1px solid var(--border);flex-wrap:wrap"></div>
 
@@ -734,8 +910,9 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
 
     <!-- Legend -->
     <div id="legend">
-      <h4>File Types</h4>
+      <h4>Atlas Legend</h4>
       <div id="legend-items"></div>
+      <div id="hotspot-legend"></div>
     </div>
 
     <!-- Minimap -->
@@ -749,6 +926,7 @@ function getWebviewContent(webview, extensionUri, graphData, rootPath, isLoading
     <div id="panel-tabs">
       <div class="panel-tab active" data-tab="details">Details</div>
       <div class="panel-tab" data-tab="stats">Stats</div>
+      <div class="panel-tab" data-tab="health">Health</div>
       <div class="panel-tab" data-tab="deps">Top Files</div>
     </div>
     <div id="panel-content">
@@ -809,6 +987,9 @@ class GraphEngine {
     this.flowOrder = ['start', 'main', 'core', 'helpers'];
     this.flowColumns = [];
 
+    // View mode
+    this.viewMode = 'normal';
+
     this.resize();
     this.bindEvents();
   }
@@ -820,7 +1001,8 @@ class GraphEngine {
     this.canvas.height = rect.height * dpr;
     this.canvas.style.width = rect.width + 'px';
     this.canvas.style.height = rect.height + 'px';
-    this.ctx.scale(dpr, dpr);
+    // Reset transform so repeated resizes don't multiply scaling.
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.W = rect.width;
     this.H = rect.height;
   }
@@ -856,6 +1038,11 @@ class GraphEngine {
   }
 
   nodeRadius(n) {
+    if (this.viewMode === 'hotspots') {
+      const base = 5;
+      const score = n.hotspotScore || 0;
+      return Math.min(base + score * 0.15, 22);
+    }
     const base = 5;
     const importedBy = (n.importedBy || []).length;
     return Math.min(base + Math.sqrt(importedBy) * 2, 18);
@@ -1146,6 +1333,7 @@ class GraphEngine {
 
   drawNodes(ctx) {
     const hasHighlight = this.highlightedNodes.size > 0;
+    const hotspotColors = { critical: '#f85149', high: '#ffa657', medium: '#58a6ff', low: '#3fb950' };
 
     for (const n of this.nodes) {
       if (!this.filteredNodes.has(n.id)) continue;
@@ -1154,13 +1342,28 @@ class GraphEngine {
       const isSelected = this.selectedNode === n;
       const isHovered = this.hoveredNode === n;
 
+      // View mode color override
+      let nodeColor;
+      if (this.viewMode === 'hotspots') {
+        nodeColor = hotspotColors[n.hotspotLevel] || n.color;
+      } else if (this.viewMode === 'deadcode') {
+        if (n.isDeadCode) nodeColor = '#f85149';
+        else if (n.isOrphan) nodeColor = '#ffa657';
+        else nodeColor = n.stageColor || n.color;
+      } else {
+        nodeColor = n.stageColor || n.color;
+      }
+
       ctx.save();
       ctx.globalAlpha = isHighlighted ? 1 : 0.2;
 
       // Glow for selected/hovered
       if (isSelected || isHovered) {
-        ctx.shadowColor = n.color;
+        ctx.shadowColor = nodeColor;
         ctx.shadowBlur = isSelected ? 16 : 8;
+      } else if (this.viewMode === 'deadcode' && n.isDeadCode) {
+        ctx.shadowColor = '#f85149';
+        ctx.shadowBlur = 6;
       }
 
       // Outer ring for selected
@@ -1178,13 +1381,13 @@ class GraphEngine {
         n.cardWidth = width;
         n.cardHeight = height;
         roundRect(ctx, n.x - width / 2, n.y - height / 2, width, height, 12);
-        ctx.fillStyle = (n.stageColor || n.color) + '22';
+        ctx.fillStyle = nodeColor + '22';
         ctx.fill();
-        ctx.strokeStyle = isSelected ? '#fff' : (n.stageColor || n.color);
+        ctx.strokeStyle = isSelected ? '#fff' : nodeColor;
         ctx.lineWidth = isSelected ? 2 : 1.1;
         ctx.stroke();
 
-        ctx.fillStyle = n.stageColor || n.color;
+        ctx.fillStyle = nodeColor;
         ctx.beginPath();
         ctx.arc(n.x - width / 2 + 14, n.y, 4.5, 0, Math.PI * 2);
         ctx.fill();
@@ -1195,12 +1398,12 @@ class GraphEngine {
 
         // Gradient fill
         const grad = ctx.createRadialGradient(n.x - n.r*0.3, n.y - n.r*0.3, 0, n.x, n.y, n.r);
-        grad.addColorStop(0, (n.stageColor || n.color) + 'ff');
-        grad.addColorStop(1, (n.stageColor || n.color) + '99');
+        grad.addColorStop(0, nodeColor + 'ff');
+        grad.addColorStop(1, nodeColor + '99');
         ctx.fillStyle = grad;
         ctx.fill();
 
-        ctx.strokeStyle = isSelected ? '#fff' : (n.stageColor || n.color) + 'cc';
+        ctx.strokeStyle = isSelected ? '#fff' : nodeColor + 'cc';
         ctx.lineWidth = isSelected ? 2 : 1;
         ctx.stroke();
       }
@@ -1254,8 +1457,10 @@ class GraphEngine {
     const mc = document.getElementById('minimap-canvas');
     const mCtx = mc.getContext('2d');
     const mW = mc.offsetWidth, mH = mc.offsetHeight;
-    mc.width = mW * 2; mc.height = mH * 2;
-    mCtx.scale(2, 2);
+    const dpr = window.devicePixelRatio || 1;
+    mc.width = mW * dpr;
+    mc.height = mH * dpr;
+    mCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     mCtx.clearRect(0, 0, mW, mH);
 
     if (this.nodes.length === 0) return;
@@ -1489,6 +1694,12 @@ class GraphEngine {
     document.getElementById('zoom-level').textContent = Math.round(this.scale * 100) + '%';
   }
 
+  recalculateRadii() {
+    for (const n of this.nodes) {
+      n.r = this.nodeRadius(n);
+    }
+  }
+
   filterByExtensions(activeExts) {
     if (activeExts.size === 0) {
       this.filteredNodes = new Set(this.nodes.map(n => n.id));
@@ -1576,6 +1787,47 @@ function extColor(ext) {
   return COLORS[ext] || '#6b7280';
 }
 
+function extLabel(ext) {
+  if (!ext) return 'Other';
+  return ext.replace('.', '').toUpperCase();
+}
+
+function languageLabel(lang, ext) {
+  if (ext === '.ts' || ext === '.tsx') return 'TypeScript';
+  if (ext === '.js' || ext === '.jsx' || ext === '.mjs' || ext === '.cjs') return 'JavaScript';
+  const LABELS = {
+    py: 'Python',
+    go: 'Go',
+    rs: 'Rust',
+    java: 'Java',
+    cs: 'C#',
+    rb: 'Ruby',
+    php: 'PHP',
+  };
+  return LABELS[lang] || extLabel(ext);
+}
+
+function collaborationTheme(status) {
+  const THEMES = {
+    isolated: { label: 'Uncollab', color: '#f85149', bg: 'rgba(248,81,73,0.12)' },
+    connected: { label: 'Connected', color: '#58a6ff', bg: 'rgba(88,166,255,0.12)' },
+    active: { label: 'Active', color: '#ffa657', bg: 'rgba(255,166,87,0.12)' },
+    collaborative: { label: 'Collaborative', color: '#3fb950', bg: 'rgba(63,185,80,0.12)' },
+  };
+  return THEMES[status] || THEMES.connected;
+}
+
+function impactTheme(kind) {
+  const THEMES = {
+    solo: { label: 'Solo', color: '#f85149' },
+    leaf: { label: 'Focused', color: '#58a6ff' },
+    orchestrator: { label: 'Orchestrator', color: '#ffa657' },
+    bridge: { label: 'Bridge', color: '#3fb950' },
+    hub: { label: 'Hub', color: '#d2a8ff' },
+  };
+  return THEMES[kind] || THEMES.leaf;
+}
+
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 
 let engine = null;
@@ -1607,6 +1859,8 @@ function init() {
   setupControls();
   setupSidePanel();
   setupTabs();
+  setupViewMode();
+  updateDeadCodeWarning();
 
   // Initial fit after simulation settles
   setTimeout(() => engine.fitToScreen(), 800);
@@ -1619,19 +1873,18 @@ function init() {
 }
 
 function setupFilterChips() {
-  const extCounts = new Map();
-  for (const n of graphData.nodes) {
-    extCounts.set(n.ext, (extCounts.get(n.ext) || 0) + 1);
-  }
-
   const container = document.getElementById('filter-chips');
-  const sorted = [...extCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+  const sorted = (graphData.stats?.extensions || [])
+    .filter(item => item.ext)
+    .slice(0, 12);
 
-  for (const [ext, count] of sorted) {
+  for (const item of sorted) {
+    const ext = item.ext;
+    const count = item.count;
     const chip = document.createElement('div');
     chip.className = 'filter-chip active';
     chip.style.color = extColor(ext);
-    chip.innerHTML = \`<div class="chip-dot" style="background:\${extColor(ext)}"></div>\${ext} <span style="opacity:.5">\${count}</span>\`;
+    chip.innerHTML = \`<div class="chip-dot" style="background:\${extColor(ext)}"></div>.\${extLabel(ext).toLowerCase()} <span style="opacity:.5">\${count}</span>\`;
     chip.addEventListener('click', () => {
       chip.classList.toggle('active');
       const active = new Set(
@@ -1644,20 +1897,81 @@ function setupFilterChips() {
   }
 }
 
+function setupViewMode() {
+  const sel = document.getElementById('view-mode');
+  sel.addEventListener('change', () => {
+    if (!engine) return;
+    engine.viewMode = sel.value;
+    if (sel.value === 'hotspots') {
+      engine.recalculateRadii();
+      engine.isSimulating = false;
+    } else if (sel.value === 'deadcode') {
+      engine.recalculateRadii();
+      engine.isSimulating = false;
+    } else {
+      engine.recalculateRadii();
+      if (engine.layout === 'force') {
+        engine.isSimulating = true;
+        engine.tick = 0;
+      }
+    }
+    updateHotspotLegend();
+    updateDeadCodeWarning();
+    updateSummaryBanner();
+  });
+}
+
+function updateDeadCodeWarning() {
+  const warning = document.getElementById('deadcode-warning');
+  const count = graphData?.stats?.deadFiles || 0;
+  if (count > 0) {
+    document.getElementById('deadcode-count').textContent = count;
+    document.getElementById('deadcode-hint').textContent =
+      engine?.viewMode === 'deadcode' ? 'shown with red highlights' : 'switch to Dead Code view';
+    warning.style.display = 'flex';
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
+function updateHotspotLegend() {
+  const hl = document.getElementById('hotspot-legend');
+  if (!engine || engine.viewMode !== 'hotspots') {
+    hl.style.display = 'none';
+    return;
+  }
+  hl.style.display = 'block';
+  hl.innerHTML = \`
+    <div class="legend-section" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Hotspots</div>
+      <div class="hl-item"><span class="hl-dot" style="background:#f85149"></span>Critical 60+</div>
+      <div class="hl-item"><span class="hl-dot" style="background:#ffa657"></span>High 31-60</div>
+      <div class="hl-item"><span class="hl-dot" style="background:#58a6ff"></span>Medium 11-30</div>
+      <div class="hl-item"><span class="hl-dot" style="background:#3fb950"></span>Low 0-10</div>
+    </div>
+  \`;
+}
+
 function setupLegend() {
-  const items = [
+  const stageItems = [
     { label: 'Start', color: '#ffa657' },
     { label: 'Main', color: '#58a6ff' },
     { label: 'Core', color: '#3fb950' },
     { label: 'Helpers', color: '#d2a8ff' },
   ];
   const container = document.getElementById('legend-items');
-  for (const item of items) {
-    const el = document.createElement('div');
-    el.className = 'legend-item';
-    el.innerHTML = \`<div class="legend-dot" style="background:\${item.color}"></div><span style="font-size:11px;color:#8b949e">\${item.label}</span>\`;
-    container.appendChild(el);
-  }
+  const topExtensions = (graphData.stats?.extensions || []).slice(0, 5);
+
+  container.innerHTML = \`
+    <div class="legend-section">
+      \${stageItems.map(item => \`<div class="legend-item"><div class="legend-dot" style="background:\${item.color}"></div><span style="font-size:11px;color:#8b949e">\${item.label}</span></div>\`).join('')}
+    </div>
+    <div class="legend-section">
+      \${topExtensions.map(item => \`<div class="legend-item"><div class="legend-dot" style="background:\${item.color || extColor(item.ext)}"></div><span style="font-size:11px;color:#8b949e">.\${extLabel(item.ext).toLowerCase()} <span style="opacity:.6">\${item.count}</span></span></div>\`).join('')}
+    </div>
+  \`;
+
+  updateHotspotLegend();
 }
 
 function setupFlowBar() {
@@ -1812,7 +2126,9 @@ function setupTabs() {
       document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentTab = tab.dataset.tab;
-      if (engine?.selectedNode) {
+      if (currentTab === 'health') {
+        renderHealthPanel();
+      } else if (engine?.selectedNode) {
         renderNodePanel(engine.selectedNode);
       } else {
         if (currentTab === 'stats') renderStatsPanel();
@@ -1853,17 +2169,28 @@ function onNodeSelected(node) {
 }
 
 function onNodeDeselected() {
-  if (currentTab === 'stats') renderStatsPanel();
+  if (currentTab === 'health') renderHealthPanel();
+  else if (currentTab === 'stats') renderStatsPanel();
   else if (currentTab === 'deps') renderTopFilesPanel();
   else renderPlaceholder();
 }
 
 function renderNodePanel(node) {
+  if (currentTab === 'health') { renderHealthPanel(); return; }
   if (currentTab === 'stats') { renderStatsPanel(); return; }
   if (currentTab === 'deps') { renderTopFilesPanel(); return; }
 
   const imports = (node.imports || []).map(id => engine.nodeMap.get(id)).filter(Boolean);
   const importedBy = (node.importedBy || []).map(id => engine.nodeMap.get(id)).filter(Boolean);
+  const collaboration = node.collaboration || { status: 'connected', impact: 'leaf', summary: 'Part of the local code flow.' };
+  const collabUI = collaborationTheme(collaboration.status);
+  const impactUI = impactTheme(collaboration.impact);
+  const touchStages = [...new Set(
+    [...imports, ...importedBy]
+      .map(n => n?.stage)
+      .filter(Boolean)
+      .filter(stage => stage !== node.stage)
+  )];
 
   const fileTypeIcons = { entry: '🚀', module: '📦', test: '🧪', config: '⚙️', style: '🎨', docs: '📄' };
 
@@ -1882,6 +2209,17 @@ function renderNodePanel(node) {
       </div>
     </div>
 
+    <div class="meta-strip">
+      <div class="meta-pill"><strong>.\${escHtml(extLabel(node.ext).toLowerCase())}</strong></div>
+      <div class="meta-pill"><strong>\${escHtml(languageLabel(node.lang, node.ext))}</strong></div>
+      <div class="meta-pill" style="color:\${collabUI.color};background:\${collabUI.bg};border-color:\${collabUI.color}33"><strong style="color:\${collabUI.color}">\${collabUI.label}</strong></div>
+      <div class="meta-pill" style="color:\${impactUI.color};border-color:\${impactUI.color}33"><strong style="color:\${impactUI.color}">\${impactUI.label}</strong></div>
+      \${node.hotspotLevel ? \`<div class="meta-pill" style="color:\${{critical:'#f85149',high:'#ffa657',medium:'#58a6ff',low:'#3fb950'}[node.hotspotLevel]};border-color:\${{critical:'#f85149',high:'#ffa657',medium:'#58a6ff',low:'#3fb950'}[node.hotspotLevel]}33"><strong style="color:\${{critical:'#f85149',high:'#ffa657',medium:'#58a6ff',low:'#3fb950'}[node.hotspotLevel]}">\${node.hotspotLevel.toUpperCase()} \${Math.round(node.hotspotScore)}</strong></div>\` : ''}
+      \${node.isDeadCode ? \`<div class="meta-pill" style="color:#f85149;border-color:#f8514933"><strong style="color:#f85149">DEAD</strong></div>\` : ''}
+      \${node.isOrphan && !node.isDeadCode ? \`<div class="meta-pill" style="color:#ffa657;border-color:#ffa65733"><strong style="color:#ffa657">ORPHAN</strong></div>\` : ''}
+      \${node.isCircular ? \`<div class="meta-pill" style="color:#d2a8ff;border-color:#d2a8ff33"><strong style="color:#d2a8ff">CIRCULAR</strong></div>\` : ''}
+    </div>
+
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-val">\${fmtNum(node.lines)}</div>
@@ -1898,6 +2236,37 @@ function renderNodePanel(node) {
       <div class="stat-card">
         <div class="stat-val">\${importedBy.length}</div>
         <div class="stat-lbl">Used by</div>
+      </div>
+      \${node.hotspotScore != null ? \`
+      <div class="stat-card">
+        <div class="stat-val" style="color:\${{critical:'#f85149',high:'#ffa657',medium:'#58a6ff',low:'#3fb950'}[node.hotspotLevel]}">\${Math.round(node.hotspotScore)}</div>
+        <div class="stat-lbl">Hotspot Score</div>
+      </div>
+      \` : ''}
+    </div>
+
+    <div class="insight-card">
+      <div class="insight-title">
+        <strong>Impact Snapshot</strong>
+        <span>\${impactUI.label}</span>
+      </div>
+      <div class="insight-copy">
+        \${escHtml(collaboration.summary || 'Part of the local code flow.')}
+        \${touchStages.length ? \` It reaches across <strong style="color:var(--text)">\${touchStages.map(stageLabel).join(', ')}</strong>.\` : ''}
+      </div>
+      <div class="mini-grid">
+        <div class="mini-stat">
+          <strong>\${imports.length + importedBy.length}</strong>
+          <span>Total links</span>
+        </div>
+        <div class="mini-stat">
+          <strong>\${node.crossStageLinks || 0}</strong>
+          <span>Cross-stage</span>
+        </div>
+        <div class="mini-stat">
+          <strong>\${node.impactScore || 0}</strong>
+          <span>Impact score</span>
+        </div>
       </div>
     </div>
 
@@ -1970,6 +2339,8 @@ function renderStatsPanel() {
   if (!graphData) return;
   const s = graphData.stats || {};
   const recommendedLayout = engine?.pickInitialLayout?.() || 'force';
+  const topExtensions = s.extensions || [];
+  const collaboration = s.collaboration || {};
 
   document.getElementById('panel-content').innerHTML = \`
     <div style="background:linear-gradient(135deg, rgba(88,166,255,0.14), rgba(63,185,80,0.08));border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
@@ -2015,7 +2386,31 @@ function renderStatsPanel() {
       </div>
     \`).join('')}
 
-    <div class="section-title" style="margin-top:16px">File Types</div>
+    \${topExtensions.length ? \`
+      <div class="section-title" style="margin-top:16px">Extension Mix</div>
+      \${topExtensions.map(item => {
+        const pct = Math.round(item.count / (s.totalFiles || 1) * 100);
+        return \`<div class="bar-item">
+          <div class="bar-label"><span>.\${extLabel(item.ext).toLowerCase()}</span><span>\${item.count} (\${pct}%)</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:\${pct}%;background:\${item.color || extColor(item.ext)}"></div></div>
+        </div>\`;
+      }).join('')}
+    \` : ''}
+
+    <div class="section-title" style="margin-top:16px">Collaboration Shape</div>
+    \${[
+      ['collaborative', 'Collaborative'],
+      ['active', 'Active'],
+      ['connected', 'Connected'],
+      ['isolated', 'Uncollab'],
+    ].map(([key, label]) => \`
+      <div class="stat-row">
+        <span class="label">\${label}</span>
+        <span class="value">\${collaboration[key] || 0}</span>
+      </div>
+    \`).join('')}
+
+    <div class="section-title" style="margin-top:16px">File Roles</div>
     \${Object.entries(s.fileTypes || {}).filter(([,v])=>v>0).map(([t,v]) => {
       const pct = Math.round(v / (s.totalFiles || 1) * 100);
       const colors = {entry:'#ffa657',module:'#58a6ff',test:'#3fb950',config:'#d2a8ff',style:'#f778ba',docs:'#8b949e'};
@@ -2065,6 +2460,140 @@ function renderTopFilesPanel() {
       </div>\`;
     }).join('') || '<div style="color:#8b949e;font-size:12px">No import data</div>'}
   \`;
+}
+
+function renderHealthPanel() {
+  if (!graphData) return;
+  const s = graphData.stats || {};
+  const healthScore = s.healthScore ?? 100;
+  const healthClass = healthScore >= 70 ? 'good' : healthScore >= 40 ? 'ok' : healthScore >= 20 ? 'warn' : 'bad';
+
+  document.getElementById('panel-content').innerHTML = \`
+    <div style="text-align:center;padding:8px 0 16px">
+      <div class="health-score-ring \${healthClass}">\${healthScore}</div>
+      <div style="font-size:12px;color:var(--text-muted)">Project Health Score</div>
+    </div>
+
+    <div class="section-title">Code Health</div>
+    \${[
+      { label: 'Dead Files', count: s.deadFiles || 0, dot: '#f85149', action: 'deadcode' },
+      { label: 'Orphans', count: s.orphanFiles || 0, dot: '#ffa657', action: null },
+      { label: 'Circular Imports', count: s.circularGroupCount || 0, dot: '#d2a8ff', action: null },
+      { label: 'Critical Hotspots', count: s.hotspotLevels?.critical || 0, dot: '#f85149', action: 'hotspots' },
+      { label: 'High Hotspots', count: s.hotspotLevels?.high || 0, dot: '#ffa657', action: 'hotspots' },
+    ].map(item => \`
+      <div class="health-stat-row" data-action="\${item.action || ''}">
+        <span class="label"><span class="dot" style="background:\${item.dot}"></span>\${item.label}</span>
+        <span class="value">\${item.count}</span>
+      </div>
+    \`).join('')}
+
+    \${(s.deadCodeNodes?.length || 0) > 0 ? \`
+      <div class="section-title" style="margin-top:12px">Dead Files <span class="count">\${s.deadCodeNodes.length}</span></div>
+      \${s.deadCodeNodes.slice(0, 15).map(n => \`
+        <div class="dead-file-item" data-id="\${escHtml(n.id)}">
+          <span class="dead-icon">⚠</span>
+          <div style="flex:1;overflow:hidden">
+            <div>\${escHtml(n.label)}</div>
+            <div class="dead-path">\${escHtml(n.path)}</div>
+          </div>
+        </div>
+      \`).join('')}
+      \${(s.deadFiles || 0) > 15 ? '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">...and ' + ((s.deadFiles || 0) - 15) + ' more</div>' : ''}
+    \` : ''}
+
+    \${(s.circularNodes?.length || 0) > 0 ? \`
+      <div class="section-title" style="margin-top:12px">Circular Dependencies <span class="count">\${s.circularNodes.length}</span></div>
+      \${s.circularNodes.slice(0, 10).map(n => \`
+        <div class="circular-item" data-id="\${escHtml(n.id)}">
+          <span style="color:#d2a8ff">↺</span>
+          <div style="flex:1;overflow:hidden">
+            <div>\${escHtml(n.label)}</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis">\${escHtml(n.path)}</div>
+          </div>
+        </div>
+      \`).join('')}
+    \` : ''}
+
+    \${(s.topHotspots?.length || 0) > 0 ? \`
+      <div class="section-title" style="margin-top:12px">Top Hotspots</div>
+      \${s.topHotspots.slice(0, 8).map((h, i) => \`
+        <div class="hotspot-item hs-\${h.level}" data-id="\${escHtml(h.id)}">
+          <div class="hs-top">
+            <span class="hs-label">\${i+1}. \${escHtml(h.label)}</span>
+            <span class="hs-score">\${h.score}</span>
+          </div>
+          <div class="hs-meta">
+            <span>\${h.imports} imports</span>
+            <span>\${h.importedBy} dependents</span>
+            <span>\${fmtNum(h.lines)} lines</span>
+            <span class="hs-level">\${h.level}</span>
+          </div>
+        </div>
+      \`).join('')}
+    \` : ''}
+
+    \${(s.topImported?.length || 0) > 0 ? \`
+      <div class="section-title" style="margin-top:12px">Most Imported Files</div>
+      \${s.topImported.slice(0, 8).map((f, i) => {
+        const node = engine?.nodes.find(n => n.relativePath === f.path);
+        return \`<div class="dep-item" \${node ? \`onclick="engine.focusNode(engine.nodeMap.get(\${JSON.stringify(node.id)}))"\` : ''}>
+          <span style="font-weight:600;color:#8b949e;font-size:11px;width:16px">\${i+1}</span>
+          <div class="dot" style="background:\${node?.color || '#6b7280'}"></div>
+          <div style="flex:1;overflow:hidden">
+            <div class="name">\${escHtml(f.label)}</div>
+            <div style="font-size:10px;color:#8b949e;font-family:'JetBrains Mono',monospace">\${escHtml(f.path)}</div>
+          </div>
+          <span style="font-size:11px;color:#58a6ff">\${f.count}×</span>
+        </div>\`;
+      }).join('')}
+    \` : ''}
+
+    <div class="section-title" style="margin-top:12px">Breakdown</div>
+    \${[
+      { label: 'Total Files', value: s.totalFiles || 0 },
+      { label: 'Total Lines', value: fmtNum(s.totalLines || 0) },
+      { label: 'Total Connections', value: s.totalEdges || 0 },
+      { label: 'Avg Dependencies', value: s.averageDependencies || 0 },
+    ].map(item => \`
+      <div class="stat-row"><span class="label">\${item.label}</span><span class="value">\${item.value}</span></div>
+    \`).join('')}
+  \`;
+
+  // Wire up health stats clicks
+  document.querySelectorAll('.health-stat-row[data-action]').forEach(el => {
+    el.addEventListener('click', () => {
+      const action = el.dataset.action;
+      if (action === 'deadcode') {
+        document.getElementById('view-mode').value = 'deadcode';
+        document.getElementById('view-mode').dispatchEvent(new Event('change'));
+      } else if (action === 'hotspots') {
+        document.getElementById('view-mode').value = 'hotspots';
+        document.getElementById('view-mode').dispatchEvent(new Event('change'));
+      }
+    });
+  });
+
+  document.querySelectorAll('.dead-file-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const node = engine?.nodeMap.get(el.dataset.id);
+      if (node) engine.focusNode(node);
+    });
+  });
+
+  document.querySelectorAll('.circular-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const node = engine?.nodeMap.get(el.dataset.id);
+      if (node) engine.focusNode(node);
+    });
+  });
+
+  document.querySelectorAll('.hotspot-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const node = engine?.nodeMap.get(el.dataset.id);
+      if (node) engine.focusNode(node);
+    });
+  });
 }
 
 function setupStats() {
